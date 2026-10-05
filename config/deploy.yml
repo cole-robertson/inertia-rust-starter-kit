@@ -1,0 +1,111 @@
+# Name of your application. Used to uniquely configure containers.
+service: inertia_rust_starter_kit
+
+# Name of the container image (use your-user/app-name on external registries).
+image: inertia_rust_starter_kit
+
+# Deploy to these servers.
+servers:
+  web:
+    - 192.168.0.1
+  # The web container already runs the queue worker and the scheduler (`start --all`).
+  # To split job processing onto its own machine, give the web role
+  # `cmd: /app/inertia_rust_starter_kit-cli start --scheduler --no-banner` (server +
+  # scheduler, so scheduled jobs still run exactly once) and add:
+  # job:
+  #   hosts:
+  #     - 192.168.0.1
+  #   cmd: /app/inertia_rust_starter_kit-cli start --worker --no-banner
+  # (With SQLite both roles must share the same host and storage volume.)
+
+# Enable SSL auto certification via Let's Encrypt and allow for multiple apps on a single web server.
+# If used with Cloudflare, set encryption mode in SSL/TLS setting to "Full" to enable CF-to-app encryption.
+#
+# The app sets Secure cookies and HSTS in production, so serve it over HTTPS.
+#
+# Don't use this when deploying to multiple web servers (then you have to terminate SSL at your load balancer).
+proxy:
+  # ssl: true
+  # host: app.example.com
+  # The container listens on PORT=80 (see Dockerfile).
+  app_port: 80
+  healthcheck:
+    path: /up
+    interval: 3
+    timeout: 3
+
+# Where you keep your container images.
+registry:
+  # Alternatives: hub.docker.com / registry.digitalocean.com / ghcr.io / ...
+  server: localhost:5555
+
+  # Needed for authenticated registries.
+  # username: your-user
+
+  # Always use an access token rather than real password when possible.
+  # password:
+  #   - KAMAL_REGISTRY_PASSWORD
+
+# Inject ENV variables into containers (secrets come from .kamal/secrets).
+env:
+  secret:
+    - SECRET_KEY_BASE
+    - MAILER_PASSWORD
+  clear:
+    # Public URL of the app; used to build links in outgoing mail.
+    HOST: https://app.example.com
+
+    # SMTP relay for outgoing mail. Without MAILER_HOST the app boots but sends no mail
+    # (drop MAILER_PASSWORD from `secret:` above too).
+    MAILER_HOST: smtp.example.com
+    MAILER_USER: postmaster@example.com
+    # MAILER_PORT: 587
+
+    # SQLite database and job queue, on the storage volume below. These are the image defaults.
+    # DATABASE_URL: sqlite:///app/storage/production.sqlite?mode=rwc
+    # QUEUE_URL: sqlite:///app/storage/queue.sqlite?mode=rwc
+
+    # Log level: trace, debug, info, warn or error.
+    # LOG_LEVEL: debug
+
+# Aliases are triggered with "bin/kamal <alias>". You can overwrite arguments on invocation:
+# "kamal logs -r job" will tail logs from the first server in the job section.
+aliases:
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs -f
+  dbc: app exec --interactive --reuse "sqlite3 /app/storage/production.sqlite"
+  migrate: app exec --reuse "/app/inertia_rust_starter_kit-cli db migrate"
+  dbstatus: app exec --reuse "/app/inertia_rust_starter_kit-cli db status"
+  routes: app exec --reuse "/app/inertia_rust_starter_kit-cli routes"
+
+# Use a persistent storage volume for sqlite database files.
+# Recommended to change this to a mounted volume path that is backed up off server.
+volumes:
+  - "inertia_rust_starter_kit_storage:/app/storage"
+
+# Bridge fingerprinted assets, like JS and CSS, between versions to avoid
+# hitting 404 on in-flight requests. Combines all files from new and old
+# version inside the asset_path.
+asset_path: /app/public/vite
+
+# Configure the image builder.
+builder:
+  arch: amd64
+  cache:
+    type: registry
+    image: your-user/inertia-rust-starter-kit-build-cache
+    options: mode=max
+
+  # Opt in to server-side rendering (see README "Server-side rendering").
+  # args:
+  #   SSR_ENABLED: true
+
+  # # Build image via remote server (useful for faster amd64 builds on arm64 computers)
+  # remote: ssh://docker@docker-builder-server
+  #
+  # secrets:
+  #   - GITHUB_TOKEN
+
+# Use a different ssh user than root
+# ssh:
+#   user: app

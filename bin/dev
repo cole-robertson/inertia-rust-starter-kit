@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Run the Loco server (with the queue worker, so mail is delivered) and the Vite dev
+# server together. Ctrl-C (or either process exiting) stops both.
+#
+#   PORT                 Loco server port (default 5150, as in config/development.yaml)
+#   VITE_PORT            Vite dev server port (default 5173); vite.config.ts reads it too
+#   APP_URL              default http://localhost:$PORT (CSRF Origin check, mail links). The
+#                        server binds 127.0.0.1 (config/development.yaml), so the app answers on
+#                        http://localhost:$PORT and http://127.0.0.1:$PORT alike, and in
+#                        development the Origin check accepts either loopback spelling.
+#   VITE_DEV_SERVER_URL  default http://localhost:$VITE_PORT (asset tags, dev SSR)
+#
+# Extra arguments are passed to `cargo loco start`. Without a start-mode flag it runs
+# `--server-and-worker`; pass e.g. `--all` to add the scheduler.
+# shellcheck disable=SC2329 # kill_tree and cleanup run from the traps below.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+export PORT="${PORT:-5150}"
+export VITE_PORT="${VITE_PORT:-5173}"
+export APP_URL="${APP_URL:-http://localhost:${PORT}}"
+export VITE_DEV_SERVER_URL="${VITE_DEV_SERVER_URL:-http://localhost:${VITE_PORT}}"
+
+# Development queues mail on the SQLite queue (workers.mode: BackgroundQueue), so
+# something has to run the worker.
+start_mode=(--server-and-worker)
+for arg in "$@"; do
+  case "$arg" in
+    -w | -w=* | --worker | --worker=* | -s | --server-and-worker | -a | --all) start_mode=() ;;
+  esac
+done
+
+pids=()
+
+# Kill a process and all of its descendants (cargo runs the app as a child process).
+kill_tree() {
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2> /dev/null || true); do
+    kill_tree "$child"
+  done
+  kill -TERM "$pid" 2> /dev/null || true
+}
+
+cleanup() {
+  trap - EXIT INT TERM
+  for pid in "${pids[@]}"; do
+    kill_tree "$pid"
+  done
+  wait 2> /dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+npx vite &
+pids+=("$!")
+
+cargo loco start --port "$PORT" ${start_mode[@]+"${start_mode[@]}"} "$@" &
+pids+=("$!")
+
+echo "bin/dev: app on ${APP_URL}, vite on ${VITE_DEV_SERVER_URL}"
+
+# Whichever exits first takes the other down with it.
+status=0
+wait -n || status=$?
+exit "$status"

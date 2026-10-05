@@ -1,0 +1,25 @@
+
+(process:934830): VIPS-WARNING **: 04:38:45.629: unable to load "/usr/lib/vips-modules-8.18/vips-openslide.so" -- libopenslide.so.1: cannot open shared object file: No such file or directory
+=> Booting Puma
+=> Rails 8.1.4 application starting in production 
+=> Run `bin/rails server --help` for more startup options
+[934830] Puma starting in cluster mode...
+[934830] * Puma version: 8.0.2 ("Into the Arena")
+[934830] * Ruby version: ruby 4.0.6 (2026-07-14 revision 03b6d3f889) +YJIT +PRISM [x86_64-linux]
+[934830] *  Min threads: 3
+[934830] *  Max threads: 3
+[934830] *  Environment: production
+[934830] *   Master PID: 934830
+[934830] *      Workers: 4
+[934830] *     Restarts: (✔) hot (✖) phased (✖) refork
+[934830] * Preloading application
+[934830] * Listening on http://127.0.0.1:5350
+[934830] Use Ctrl-C to stop
+[934830] - Worker 0 (PID: 934933) booted in 0.01s, phase: 0
+[934830] - Worker 1 (PID: 934945) booted in 0.01s, phase: 0
+[934830] - Worker 2 (PID: 934957) booted in 0.0s, phase: 0
+[934830] - Worker 3 (PID: 934969) booted in 0.0s, phase: 0
+[934830] === puma shutdown: 2026-09-29 04:39:23 -0500 ===
+[934830] - Goodbye!
+[934830] - Gracefully shutting down workers...
+Exiting

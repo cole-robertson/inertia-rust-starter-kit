@@ -1,0 +1,312 @@
+diff --git a/Gemfile b/Gemfile
+index 7ece949..23bfcc7 100644
+--- a/Gemfile
++++ b/Gemfile
+@@ -34,17 +34,13 @@ gem "thruster", require: false
+ # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
+ # gem "image_processing", "~> 1.2"
+ 
+-gem "rails_vite" # Vite integration [https://github.com/skryukov/rails_vite]
+ 
+ # The Rails adapter for Inertia.js [https://inertia-rails.dev]
+-gem "inertia_rails", "~> 3.21"
+ 
+ # An authentication system generator for Rails applications
+ # we leave gem here to watch for security updates
+-gem "authentication-zero"
+ 
+ # Brings Rails named routes to javascript
+-gem "typelizer"
+ 
+ group :development, :test do
+   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
+diff --git a/app/controllers/application_controller.rb b/app/controllers/application_controller.rb
+index e7db7f0..4848201 100644
+--- a/app/controllers/application_controller.rb
++++ b/app/controllers/application_controller.rb
+@@ -1,8 +1,8 @@
+ # frozen_string_literal: true
+ 
+ class ApplicationController < ActionController::Base
+-  # Only allow modern browsers supporting webp images, web push, badges, import maps, CSS nesting, and CSS :has.
+   allow_browser versions: :modern
++  protect_from_forgery with: :exception
+ 
+   before_action :set_current_request_details
+   before_action :authenticate
+@@ -17,7 +17,7 @@ class ApplicationController < ActionController::Base
+     return unless perform_authentication
+ 
+     flash[:notice] = "You are already signed in"
+-    redirect_to root_path
++    redirect_to dashboard_path
+   end
+ 
+   def perform_authentication
+@@ -27,6 +27,6 @@ class ApplicationController < ActionController::Base
+ 
+   def set_current_request_details
+     Current.user_agent = request.user_agent
+-    Current.ip_address = request.ip
++    Current.ip_address = request.remote_ip
+   end
+ end
+diff --git a/app/controllers/dashboard_controller.rb b/app/controllers/dashboard_controller.rb
+index 3383843..81d6801 100644
+--- a/app/controllers/dashboard_controller.rb
++++ b/app/controllers/dashboard_controller.rb
+@@ -2,5 +2,12 @@
+ 
+ class DashboardController < InertiaController
+   def index
++    page_json = inertia_page("dashboard/index")
++    if request.xhr?
++      render plain: page_json, content_type: "application/json"
++    else
++      @page_json = page_json
++      render "inertia/page"
++    end
+   end
+ end
+diff --git a/app/controllers/health_controller.rb b/app/controllers/health_controller.rb
+new file mode 100644
+index 0000000..a4a6da9
+--- /dev/null
++++ b/app/controllers/health_controller.rb
+@@ -0,0 +1,9 @@
++# frozen_string_literal: true
++
++class HealthController < ApplicationController
++  skip_before_action :authenticate
++
++  def show
++    render layout: false
++  end
++end
+diff --git a/app/controllers/inertia_controller.rb b/app/controllers/inertia_controller.rb
+index 64c6abb..5aa6f58 100644
+--- a/app/controllers/inertia_controller.rb
++++ b/app/controllers/inertia_controller.rb
+@@ -1,9 +1,39 @@
+ # frozen_string_literal: true
+ 
++# Hand-written Inertia protocol (what inertia_rails does for these pages):
++# an XHR visit gets the page object as JSON, a full visit gets it inside the
++# HTML shell. Shared props match the kit: errors + auth.user + auth.session.
+ class InertiaController < ApplicationController
+-  inertia_config default_render: true
+-  inertia_share auth: {
+-        user: -> { Current.user.as_json(only: %i[id name email verified created_at updated_at]) },
+-        session: -> { Current.session.as_json(only: %i[id]) }
+-      }
++  ASSET_VERSION = "816e418b77453e34d00fd7af7b186aa6"
++
++  private
++
++  # Actions call render themselves (not from a helper): Roundhouse appends an
++  # implicit head(:no_content) to any action whose body has no literal render.
++  def inertia_page(component)
++    {
++      component: component,
++      props: { errors: {}, auth: { user: auth_user, session: auth_session } },
++      url: request.fullpath,
++      version: ASSET_VERSION,
++      encryptHistory: true,
++      clearHistory: false,
++      sharedProps: [ "errors", "auth" ]
++    }.to_json
++  end
++
++  def auth_user
++    user = Current.user
++    return nil if user.nil?
++
++    { id: user.id, name: user.name, email: user.email, verified: user.verified,
++      created_at: user.created_at.utc.iso8601(3), updated_at: user.updated_at.utc.iso8601(3) }
++  end
++
++  def auth_session
++    session_record = Current.session
++    return nil if session_record.nil?
++
++    { id: session_record.id }
++  end
+ end
+diff --git a/app/controllers/sessions_controller.rb b/app/controllers/sessions_controller.rb
+index 34ac3c0..ca6e8cc 100644
+--- a/app/controllers/sessions_controller.rb
++++ b/app/controllers/sessions_controller.rb
+@@ -3,31 +3,25 @@
+ class SessionsController < InertiaController
+   skip_before_action :authenticate, only: %i[new create]
+   before_action :require_no_authentication, only: %i[new create]
+-  before_action :set_session, only: :destroy
+ 
+   def new
++    page_json = inertia_page("sessions/new")
++    if request.xhr?
++      render plain: page_json, content_type: "application/json"
++    else
++      @page_json = page_json
++      render "inertia/page"
++    end
+   end
+ 
+   def create
+     if user = User.authenticate_by(email: params[:email], password: params[:password])
+-      @session = user.sessions.create!
+-      cookies.signed.permanent[:session_token] = { value: @session.id, httponly: true }
++      session_record = Session.create!(user: user)
++      cookies.signed.permanent[:session_token] = { value: session_record.id, httponly: true }
+ 
+       redirect_to dashboard_path, notice: "Signed in successfully"
+     else
+       redirect_to sign_in_path, alert: "That email or password is incorrect"
+     end
+   end
+-
+-  def destroy
+-    @session.destroy!
+-    Current.session = nil
+-    redirect_to settings_sessions_path, notice: "That session has been logged out", inertia: { clear_history: true }
+-  end
+-
+-  private
+-
+-  def set_session
+-    @session = Current.user.sessions.find(params[:id])
+-  end
+ end
+diff --git a/app/models/user.rb b/app/models/user.rb
+index aeb5ebd..5c44b9e 100644
+--- a/app/models/user.rb
++++ b/app/models/user.rb
+@@ -3,14 +3,6 @@
+ class User < ApplicationRecord
+   has_secure_password
+ 
+-  generates_token_for :email_verification, expires_in: 2.days do
+-    email
+-  end
+-
+-  generates_token_for :password_reset, expires_in: 20.minutes do
+-    password_salt.last(10)
+-  end
+-
+   has_many :sessions, dependent: :destroy
+ 
+   validates :name, presence: true
+diff --git a/app/views/health/show.html.erb b/app/views/health/show.html.erb
+new file mode 100644
+index 0000000..c5d618b
+--- /dev/null
++++ b/app/views/health/show.html.erb
+@@ -0,0 +1 @@
++<!DOCTYPE html><html><body style="background-color: green"></body></html>
+\ No newline at end of file
+diff --git a/app/views/inertia/page.html.erb b/app/views/inertia/page.html.erb
+new file mode 100644
+index 0000000..f80af8f
+--- /dev/null
++++ b/app/views/inertia/page.html.erb
+@@ -0,0 +1,2 @@
++<script data-page="app" type="application/json"><%= raw @page_json %></script>
++<div id="app"></div>
+diff --git a/app/views/layouts/application.html.erb b/app/views/layouts/application.html.erb
+index d8a17a6..7594bea 100644
+--- a/app/views/layouts/application.html.erb
++++ b/app/views/layouts/application.html.erb
+@@ -6,7 +6,6 @@
+     <meta name="apple-mobile-web-app-capable" content="yes">
+     <meta name="application-name" content="React Starter Kit">
+     <meta name="mobile-web-app-capable" content="yes">
+-    <%= capybara_lockstep if defined?(Capybara::Lockstep) %>
+     <%= csrf_meta_tags %>
+     <%= csp_meta_tag %>
+ 
+@@ -28,8 +27,12 @@
+       );
+     </script>
+ 
+-    <%= vite_tags "application.css", "inertia.tsx" %>
+-    <%= inertia_ssr_head %>
++    <link rel="stylesheet" href="/vite/assets/application-V4cioZqq.css">
++<link rel="modulepreload" href="/vite/assets/rolldown-runtime-CbXtAM7H.js">
++<link rel="modulepreload" href="/vite/assets/jsx-runtime-C9CfIFoG.js">
++<link rel="modulepreload" href="/vite/assets/storage-DVQJ3bM_.js">
++<link rel="modulepreload" href="/vite/assets/createLucideIcon-DpXiFX8z.js">
++<script src="/vite/assets/inertia-hxHKCxze.js" type="module"></script>
+   </head>
+ 
+   <body>
+diff --git a/config/puma.rb b/config/puma.rb
+index c9fff2b..c18690f 100644
+--- a/config/puma.rb
++++ b/config/puma.rb
+@@ -41,4 +41,4 @@ plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"]
+ # In other environments, only set the PID file if requested.
+ pidfile ENV["PIDFILE"] if ENV["PIDFILE"]
+ # Run the Inertia SSR process alongside Puma when config.ssr_enabled is true.
+-plugin :inertia_ssr
++# plugin :inertia_ssr  (stand-in slice: inertia_rails removed)
+diff --git a/config/routes.rb b/config/routes.rb
+index 19f5688..b803401 100644
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -1,31 +1,12 @@
+ # frozen_string_literal: true
+ 
++# STAND-IN SLICE of the Evil Martians kit (see bench/compiled-rails/README.md):
++# only the benchmarked endpoints, with the Inertia protocol written by hand
++# because Roundhouse does not model inertia_rails.
+ Rails.application.routes.draw do
+   get  "sign_in", to: "sessions#new", as: :sign_in
+   post "sign_in", to: "sessions#create"
+-  get  "sign_up", to: "users#new", as: :sign_up
+-  post "sign_up", to: "users#create"
+-
+-  resources :sessions, only: [ :destroy ]
+-  resource :users, only: [ :destroy ]
+-
+-  namespace :identity do
+-    resource :email_verification, only: [ :show, :create ]
+-    resource :password_reset,     only: [ :new, :edit, :create, :update ]
+-  end
+-
+   get :dashboard, to: "dashboard#index"
+-
+-  namespace :settings do
+-    resource :profile, only: [ :show, :update ]
+-    resource :password, only: [ :show, :update ]
+-    resource :email, only: [ :show, :update ]
+-    resources :sessions, only: [ :index ]
+-    inertia :appearance
+-  end
+-
+-  root "home#index"
+-
+-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
+-  get "up" => "rails/health#show", as: :rails_health_check
++  get "up", to: "health#show"
++  root "sessions#new"
+ end
+
+# Deleted from the kit for the slice (whole files, not shown above):
+#   app/controllers/home_controller.rb
+#   app/controllers/identity/email_verifications_controller.rb
+#   app/controllers/identity/password_resets_controller.rb
+#   app/controllers/settings/emails_controller.rb
+#   app/controllers/settings/passwords_controller.rb
+#   app/controllers/settings/profiles_controller.rb
+#   app/controllers/settings/sessions_controller.rb
+#   app/controllers/users_controller.rb
+#   app/mailers/application_mailer.rb
+#   app/mailers/user_mailer.rb
+#   app/views/pwa/manifest.json.erb
+#   app/views/pwa/service-worker.js
+#   app/views/user_mailer/email_verification.html.erb
+#   app/views/user_mailer/password_reset.html.erb
+#   config/initializers/inertia_rails.rb
+#   config/initializers/typelizer.rb
+#   app/javascript/** (93 files; the prebuilt bundle in public/vite is kept and served unchanged)
+# Gemfile.lock: the four gems above and their deps drop out (bundle install).

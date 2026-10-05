@@ -1,0 +1,117 @@
+[workspace]
+
+[package]
+name = "inertia_rust_starter_kit"
+version = "0.1.0"
+edition = "2021"
+publish = false
+default-run = "inertia_rust_starter_kit-cli"
+
+[workspace.dependencies]
+loco-rs = { version = "1.2", default-features = false }
+
+[dependencies]
+loco-rs = { workspace = true, features = [
+  "cli",
+  "with-db",
+  "db-sqlite",
+  "worker",
+  "cache_inmem",
+] }
+migration = { path = "migration" }
+
+async-trait = { version = "0.1" }
+axum = { version = "0.8" }
+base64 = { version = "0.23" }
+chrono = { version = "0.4", features = ["serde"] }
+cookie = { version = "0.18", features = ["private", "signed", "percent-encode"] }
+# Singular/plural for the generators' nested names (src/generate.rs); already in the tree via
+# loco-gen, which inflects the same way.
+cruet = { version = "1.0" }
+# Rails' `parameterize` transliteration for account slugs (already in the tree via tera).
+deunicode = { version = "1.6" }
+# Live updates (src/live/): the SSE stream and the hub; both already in the tree via loco-rs.
+futures-util = { version = "0.3" }
+hex = { version = "0.4" }
+hmac = { version = "0.13" }
+include_dir = { version = "0.7" }
+# Loco's generator engine (already linked in via loco-rs); `cargo loco task scaffold:pages` renders
+# .loco-templates/scaffold/pages/ with it, the same way `cargo loco generate` renders the rest.
+loco-gen = { version = "1.2" }
+# Global allocator (src/bin/main.rs): +50–66% req/s over glibc malloc, measured in docs/BENCHMARK.md.
+mimalloc = { version = "0.1.52", default-features = false }
+rand = { version = "0.10" }
+regex = { version = "1.11" }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }
+sea-orm = { version = "2.0", features = [
+  "sqlx-sqlite",
+  "runtime-tokio-rustls",
+  "macros",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_urlencoded = { version = "0.7" }
+sha2 = { version = "0.11" }
+subtle = { version = "2.6" }
+tokio = { version = "1.45", default-features = false, features = [
+  "rt-multi-thread",
+  "process",
+  "time",
+  "fs",
+  "sync",
+  "macros",
+] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7", features = ["add-extension", "fs", "normalize-path", "set-header", "trace"] }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+url = { version = "2" }
+uuid = { version = "1.6", features = ["v4"] }
+# Must match loco-rs (its Validatable trait returns validator 0.20 types).
+validator = { version = "0.20", features = ["derive"] }
+
+[features]
+# Benchmark-only endpoints under /bench (docs/BENCHMARK.md, "I/O-bound workloads"). Off by default:
+# the normal build, tests and Docker image contain none of it.
+bench = ["migration/bench"]
+
+[[bin]]
+name = "inertia_rust_starter_kit-cli"
+path = "src/bin/main.rs"
+required-features = []
+
+[dev-dependencies]
+loco-rs = { workspace = true, features = ["testing"] }
+serial_test = { version = "4.0" }
+rstest = { version = "0.27" }
+# Must match loco-rs (loco_rs::testing hands out its axum_test::TestServer).
+axum-test = { version = "17.3" }
+# tests/db.rs reads SQLite's per-statement re-prepare counter (the version sqlx already links).
+libsqlite3-sys = { version = "0.37" }
+
+# Faster dev rebuilds: line tables only for our code (backtraces still show file:line), no debug
+# info for dependencies. Cuts the debug binary from ~410 MB to ~100 MB and the one-file-edit
+# rebuild from ~5.8 s to ~4 s (measured on 8 vCPU). Set `debug = true` locally if you need a
+# full debugger session.
+[profile.dev]
+debug = "line-tables-only"
+[profile.dev.package."*"]
+debug = false
+
+# Argon2 is deliberately slow; unoptimized it makes the test suite crawl.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+
+# Typelizer-compatible digest header in generated frontend/routes/*.ts (src/route_table.rs).
+[dependencies.md-5]
+version = "0.11"
+
+# `loco_rs::Error` is large by design and nearly every Loco fn returns it, so
+# clippy::result_large_err fires on every handler/model fn with newer clippy.
+[lints.clippy]
+result_large_err = "allow"

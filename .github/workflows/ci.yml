@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Every crate in Cargo.lock, other platforms' too: tests/rename.rs runs
+      # `cargo metadata --offline`, which needs them all, while a build downloads only the
+      # host's. Without this the test fails whenever the lock changes (a new cache key).
+      - name: Fetch crates
+        run: cargo fetch --locked
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Seeds load
+        env:
+          LOCO_ENV: test
+        run: cargo loco db seed --reset
+
+  generators:
+    name: Generated code builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      # sea-orm-cli writes the entities when `cargo loco generate scaffold` migrates.
+      - name: Install sea-orm-cli
+        run: sea-orm-cli --version 2>/dev/null | grep -q 2.0.4 || cargo install --locked sea-orm-cli@2.0.4
+
+      # Runs the real generators in a copy of the app (an account-scoped and a --global
+      # scaffold; page, write and nested controllers), then clippy, their request tests,
+      # routes_fresh, tsc and eslint there (tests/controller_generator.rs).
+      - name: Generated code builds and passes its tests
+        run: cargo test --locked --test controller_generator -- --ignored
+
+  routes:
+    name: Generated routes are fresh
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Regenerate and compare frontend/routes
+        run: |
+          cargo test --locked --test routes_fresh
+          git diff --exit-code -- frontend/routes
+          test -z "$(git ls-files --others --exclude-standard -- frontend/routes)"
+
+  js:
+    name: JavaScript (lint, format, types, build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Lint JavaScript
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format
+
+      - name: Type check
+        run: npm run check
+
+      - name: Build client assets
+        run: npx vite build
+
+      - name: Build SSR bundle
+        run: npx vite build --ssr
+
+  security:
+    name: Security audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Scan crates for advisories, licenses and sources (cargo-deny)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: NPM vulnerability audit
+        run: npm audit
+
+      # The Cloudflare deploy tooling has its own lockfile; the root audit doesn't see it.
+      - name: NPM vulnerability audit (deploy/cloudflare)
+        run: npm audit
+        working-directory: deploy/cloudflare
+
+  e2e:
+    name: System test (Playwright)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: |
+          npx vite build
+          npx vite build --ssr
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Two projects from playwright.config.ts: "csr" (SSR off) and "ssr" (the app spawns
+      # the real ssr/ssr.js); e2e/rendering.spec.ts asserts which path rendered the HTML.
+      - name: Run system test (client-rendered and server-rendered)
+        run: npx playwright test --project csr --project ssr
+
+      - name: Keep Playwright traces and server logs from failed tests
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright
+          path: |
+            ${{ github.workspace }}/tmp/playwright
+            ${{ github.workspace }}/playwright-report
+            ${{ github.workspace }}/tmp/e2e/*/server.log
+          if-no-files-found: ignore

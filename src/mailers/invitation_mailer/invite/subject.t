@@ -1,0 +1,1 @@
+{{ inviter_name }} invited you to {{ account_name }} on {{ app_name }}

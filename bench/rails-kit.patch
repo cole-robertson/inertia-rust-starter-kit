@@ -1,0 +1,24 @@
+diff --git i/config/initializers/inertia_rails.rb w/config/initializers/inertia_rails.rb
+index e80bcae..9e4494a 100644
+--- i/config/initializers/inertia_rails.rb
++++ w/config/initializers/inertia_rails.rb
+@@ -9,5 +9,6 @@ InertiaRails.configure do |config|
+   config.parent_controller = "::InertiaController"
+ 
+   # Flip to true (and rebuild with --build-arg SSR_ENABLED=true) to enable SSR.
+-  config.ssr_enabled = true
++  config.ssr_enabled = ENV.fetch("INERTIA_SSR", "false") == "true"
++  config.ssr_url = "http://127.0.0.1:13724"
+ end
+diff --git i/vite.config.ts w/vite.config.ts
+index 9ce61fc..23ff475 100644
+--- i/vite.config.ts
++++ w/vite.config.ts
+@@ -20,6 +20,6 @@ export default defineConfig(({ command }) => ({
+     babel({ presets: [reactCompilerPreset()] }),
+     tailwindcss(),
+     rails(),
+-    inertia({ ssr: "app/javascript/entrypoints/inertia.tsx" }),
++    inertia({ ssr: { entry: "app/javascript/entrypoints/inertia.tsx", host: "127.0.0.1", port: 13724 } }),
+   ],
+ }))

@@ -1,0 +1,5 @@
+# Used by `docker compose --profile tls`: HTTPS for $DOMAIN (Let's Encrypt), proxied to the app.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:80
+}

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Container entrypoint (Dockerfile). With DEMO_ADMIN_EMAIL and DEMO_ADMIN_PASSWORD both set, it
+# migrates and creates/updates that verified user (`task seed:demo`) before starting the app, so
+# a demo deploy always has a login, even on a fresh or ephemeral disk. Otherwise it does nothing
+# extra. Never set these on a real deployment.
+set -e
+if [ -n "${DEMO_ADMIN_EMAIL:-}" ] && [ -n "${DEMO_ADMIN_PASSWORD:-}" ]; then
+  /app/inertia_rust_starter_kit-cli db migrate
+  /app/inertia_rust_starter_kit-cli task seed:demo \
+    "email:${DEMO_ADMIN_EMAIL}" "password:${DEMO_ADMIN_PASSWORD}" "name:${DEMO_ADMIN_NAME:-Admin}"
+fi
+exec "$@"

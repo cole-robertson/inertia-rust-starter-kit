@@ -1,0 +1,2 @@
+em-rust-build.log: 200 errors; error: could not compile `app` (lib) due to 200 previous errors; 105 warnings emitted
+slice-rust-build.log: 79 errors; error: could not compile `app` (lib) due to 79 previous errors; 100 warnings emitted

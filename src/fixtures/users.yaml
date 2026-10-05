@@ -1,0 +1,19 @@
+# Password for both users is: Secret1*3*5*
+#
+# Hashed with argon2id (loco_rs::hash defaults: m=19456, t=2, p=1). The Rails
+# kit's bcrypt digests ("$2a$04$...") do NOT carry over — loco_rs::hash only
+# verifies argon2 PHC strings.
+- id: 1
+  name: Test User
+  email: one@example.com
+  password_digest: "$argon2id$v=19$m=19456,t=2,p=1$BCU0bWnpihndwSumUk2N6g$4YZMIEr4TpdDxey2osQUiiIllqNzc6/fkoWzV3oddaY"
+  verified: true
+  created_at: "2025-08-01T12:00:00+00:00"
+  updated_at: "2025-08-01T12:00:00+00:00"
+- id: 2
+  name: Another User
+  email: two@example.com
+  password_digest: "$argon2id$v=19$m=19456,t=2,p=1$BCU0bWnpihndwSumUk2N6g$4YZMIEr4TpdDxey2osQUiiIllqNzc6/fkoWzV3oddaY"
+  verified: true
+  created_at: "2025-08-01T12:00:00+00:00"
+  updated_at: "2025-08-01T12:00:00+00:00"

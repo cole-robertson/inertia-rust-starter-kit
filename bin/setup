@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Set up or update the development environment. Idempotent: run it any time.
+#
+#   bin/setup                 install deps, build, migrate, seed a fresh DB, then exec bin/dev
+#   bin/setup --skip-server   same, but don't start the dev server (used by bin/ci)
+#   bin/setup --reset         drop and re-seed the development database
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+skip_server=false
+reset=false
+for arg in "$@"; do
+  case "$arg" in
+    --skip-server) skip_server=true ;;
+    --reset) reset=true ;;
+    *) echo "Unknown option: $arg" >&2; exit 64 ;;
+  esac
+done
+
+echo "== Checking toolchain =="
+for tool in cargo node npm; do
+  if ! command -v "$tool" > /dev/null 2>&1; then
+    echo "Missing required tool: $tool" >&2
+    [ "$tool" = cargo ] && echo "Install Rust via https://rustup.rs" >&2
+    [ "$tool" != cargo ] && echo "Install Node $(cat .node-version) (see .node-version), e.g. with mise or nvm" >&2
+    exit 1
+  fi
+done
+wanted_node="$(cat .node-version)"
+current_node="$(node --version)"
+current_node="${current_node#v}"
+if [ "${current_node%%.*}" != "${wanted_node%%.*}" ]; then
+  echo "warning: Node ${current_node} is installed but .node-version asks for ${wanted_node}" >&2
+fi
+echo "cargo $(cargo --version | cut -d' ' -f2), node ${current_node}, npm $(npm --version)"
+# Only the generators need it (`cargo loco generate model|scaffold` runs `db entities`), so
+# its absence is a note, not a failure.
+if ! command -v sea-orm-cli > /dev/null 2>&1; then
+  echo "note: sea-orm-cli is not installed; \`cargo loco generate model|scaffold\` needs it:" >&2
+  echo "      cargo install --locked sea-orm-cli@2.0.4" >&2
+fi
+
+echo
+echo "== Installing dependencies =="
+npm ci
+cargo build
+
+echo
+echo "== Preparing database =="
+# Seed only a database this script creates (like `rails db:prepare`), so re-running
+# setup never duplicates fixture rows. Honours DATABASE_URL like config/development.yaml.
+db_url="${DATABASE_URL:-sqlite://inertia_rust_starter_kit_development.sqlite?mode=rwc}"
+db_file="${db_url#sqlite://}"
+db_file="${db_file%%\?*}"
+fresh_db=false
+[ -s "$db_file" ] || fresh_db=true
+
+cargo loco db migrate
+if [ "$reset" = true ]; then
+  cargo loco db seed --reset
+elif [ "$fresh_db" = true ]; then
+  cargo loco db seed
+else
+  echo "Database ${db_file} already exists; not seeding (use --reset to re-seed)."
+fi
+
+echo
+echo "== Removing old logs and tempfiles =="
+rm -rf tmp/playwright test-results playwright-report
+
+if [ "$skip_server" = false ]; then
+  echo
+  echo "== Starting development server =="
+  exec bin/dev
+fi

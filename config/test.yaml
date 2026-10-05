@@ -1,0 +1,107 @@
+# Loco configuration: test (cargo test, and bin/e2e-server for Playwright).
+
+logger:
+  enable: false
+  pretty_backtrace: true
+  level: debug
+  format: compact
+  # Off for cargo test. bin/e2e-server turns it on (LOG_FILE=true, with RUST_LOG=warn, which
+  # takes precedence over `level` and covers every crate, sqlx's pool included), so a failed
+  # Playwright run leaves the server's warnings and errors in tmp/e2e/<port>/server.log; CI
+  # uploads it with the traces.
+  file_appender:
+    enable: <%= get_env(name="LOG_FILE", default="false") %>
+    level: warn
+    format: compact
+    rotation: never
+    dir: <%= get_env(name="LOG_DIR", default="tmp") %>
+    filename_prefix: server
+    filename_suffix: log
+    max_log_files: 1
+
+server:
+  # No `X-Powered-By: loco.rs` header (Rails sends none).
+  ident: ""
+  port: <%= get_env(name="PORT", default="5150") %>
+  binding: <%= get_env(name="BINDING", default="localhost") %>
+  host: http://localhost
+  middlewares:
+    # Files in public/ (Vite output under /vite, icons, robots.txt, error
+    # pages) are served by the router fallback in src/inertia/public.rs, only
+    # when no route matched: /vite/* is cached immutably, other files for an
+    # hour, and a missing file is a real 404. Loco's static layer would serve
+    # public/404.html with a 200 and immutable caching instead.
+    static:
+      enable: false
+    secure_headers:
+      enable: false
+    fallback:
+      enable: false
+    limit_payload:
+      enable: true
+      body_limit: 5mb
+
+workers:
+  # Jobs (mail) run inline so tests can assert on deliveries.
+  mode: ForegroundBlocking
+
+queue:
+  kind: Sqlite
+  uri: <%= get_env(name="QUEUE_URL", default="sqlite://loco_test.sqlite?mode=rwc") %>
+  dangerously_flush: false
+
+mailer:
+  # Deliveries are recorded in memory instead of sent (`cargo test` reads them). The
+  # Playwright servers set MAILER_STUB=false and send to e2e/mail-sink.ts instead
+  # (bin/e2e-server), where the specs read them back.
+  stub: <%= get_env(name="MAILER_STUB", default="true") %>
+  smtp:
+    enable: true
+    host: localhost
+    port: <%= get_env(name="MAILER_PORT", default="1025") %>
+    secure: false
+
+database:
+  uri: <%= get_env(name="DATABASE_URL", default="sqlite://inertia_rust_starter_kit_test.sqlite?mode=rwc") %>
+  enable_logging: false
+  connect_timeout: <%= get_env(name="DB_CONNECT_TIMEOUT", default="500") %>
+  idle_timeout: <%= get_env(name="DB_IDLE_TIMEOUT", default="500") %>
+  min_connections: <%= get_env(name="DB_MIN_CONNECTIONS", default="1") %>
+  max_connections: <%= get_env(name="DB_MAX_CONNECTIONS", default="1") %>
+  auto_migrate: true
+  dangerously_truncate: <%= get_env(name="DB_DANGEROUSLY_TRUNCATE", default="true") %>
+  dangerously_recreate: <%= get_env(name="DB_DANGEROUSLY_RECREATE", default="true") %>
+
+settings:
+  secret_key_base: <%= get_env(name="SECRET_KEY_BASE", default="test-secret-key-base-0123456789abcdef0123456789abcdef0123456789abcdef0123") %>
+  app_url: <%= get_env(name="APP_URL", default="http://localhost:5150") %>
+  app_name: Inertia Rust Starter Kit
+  # Other hostnames this app answers on, comma-separated; each has its own session (host-only
+  # cookies). Empty: only app_url's host. See the deploy recipe, "More than one hostname".
+  extra_hosts: "<%= get_env(name="EXTRA_HOSTS", default="") %>"
+  # Who can sign up: open (anyone; without an invitation they get a personal account) or
+  # invitation_only (only through a pending invitation, with the address it was sent to).
+  sign_up: <%= get_env(name="SIGN_UP", default="open") %>
+  mail_from: from@example.com
+  encrypt_history: false
+  # Like Rails' `allow_forgery_protection = false` in test: request specs post
+  # without a token. The CSRF layer itself is covered by tests/inertia.
+  # bin/e2e-server can turn it on with FORGERY_PROTECTION=true.
+  forgery_protection: <%= get_env(name="FORGERY_PROTECTION", default="false") %>
+  vite:
+    # Tests (and the Playwright run) use built assets when present; a missing
+    # manifest outside production only drops the asset tags.
+    dev_server: <%= get_env(name="VITE_DEV_SERVER", default="false") %>
+    dev_server_url: http://localhost:5173
+    manifest_path: public/vite/.vite/manifest.json
+  # Server-managed <head> tags (inertia-rails' config.server_head). true: tags go to
+  # the client as HTML in the `head` prop, SSR renders them and every navigation
+  # updates them. Build the client with the same VITE_INERTIA_SERVER_HEAD.
+  server_head: <%= get_env(name="VITE_INERTIA_SERVER_HEAD", default="false") %>
+  ssr:
+    enabled: <%= get_env(name="SSR_ENABLED", default="false") %>
+    spawn: <%= get_env(name="SSR_SPAWN", default="false") %>
+    bundle: ssr/ssr.js
+    # The spawned server listens on this URL's port (INERTIA_SSR_PORT).
+    url: <%= get_env(name="SSR_URL", default="http://127.0.0.1:13714/render") %>
+    timeout_ms: 1500

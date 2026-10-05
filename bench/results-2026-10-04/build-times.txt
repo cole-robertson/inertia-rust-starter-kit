@@ -1,0 +1,6 @@
+start 2026-10-04T06:25:33Z
+rust_cold 1m 41s rc=0 ci_cpu_s=0 load=7.02 3.68 3.38
+rust_edit 23.5s rc=0 ci_cpu_s=0 load=5.27 3.53 3.34
+rails_cold 1m 11s rc=0 ci_cpu_s=0 load=4.81 3.67 3.39
+rails_edit 8.1s rc=0 ci_cpu_s=0 load=4.22 3.58 3.37
+DONE 2026-10-04T06:28:58Z

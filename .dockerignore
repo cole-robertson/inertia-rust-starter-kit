@@ -1,0 +1,41 @@
+# See https://docs.docker.com/engine/reference/builder/#dockerignore-file for more about ignoring files.
+
+# Ignore git directory.
+/.git/
+/.gitignore
+
+# Ignore all environment files, including deploy/compose/.env and deploy/cloudflare/.env.local.
+/.env*
+/deploy/*/.env*
+
+# Ignore local config overrides.
+/config/local.yaml
+/config/*.local.yaml
+
+# Ignore build output; the image builds its own.
+/target/
+/node_modules/
+/public/vite/
+/ssr/
+
+# Ignore SQLite databases, storage, logs and tempfiles.
+*.sqlite
+*.sqlite-*
+/storage/
+/tmp/
+/test-results/
+/playwright-report/
+
+# Ignore CI service files.
+/.github
+
+# Ignore Kamal files.
+/config/deploy*.yml
+/.kamal
+
+# Ignore agent tooling
+/.claude
+
+# Ignore Docker-related files
+/.dockerignore
+/Dockerfile*

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Run every CI step locally, in order, stopping at the first failure.
+# A translation of the Rails kit's config/ci.rb; .github/workflows/ci.yml runs the same steps.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+started=$SECONDS
+
+step() {
+  local title="$1"
+  shift
+  printf '\n\033[1;34m== %s ==\033[0m\n\033[2m$ %s\033[0m\n' "$title" "$*"
+  local t0=$SECONDS
+  if ! bash -c "$*"; then
+    printf '\n\033[1;31m✗ %s failed\033[0m\n' "$title" >&2
+    exit 1
+  fi
+  printf '\033[32m✓ %s (%ss)\033[0m\n' "$title" "$((SECONDS - t0))"
+}
+
+step "Setup" "bin/setup --skip-server"
+
+step "Style: Rust format" "cargo fmt --all -- --check"
+step "Style: Rust clippy" "cargo clippy --all-targets -- -D warnings"
+
+step "JavaScript: lint" "npm run lint"
+step "JavaScript: format" "npm run format"
+step "JavaScript: types check" "npm run check"
+step "JavaScript: generated routes are fresh" \
+  "cargo test --test routes_fresh && git diff --exit-code -- frontend/routes && test -z \"\$(git ls-files --others --exclude-standard -- frontend/routes)\""
+
+step "Security: Cargo audit (cargo-deny)" "cargo deny --version > /dev/null 2>&1 || { echo 'cargo-deny missing: cargo install --locked cargo-deny' >&2; exit 1; }; cargo deny check"
+step "Security: NPM vulnerability audit" "npm audit"
+step "Security: NPM vulnerability audit (deploy/cloudflare)" "npm audit --prefix deploy/cloudflare"
+
+step "Tests: Rust" "cargo test"
+step "Tests: generated code builds" "cargo test --test controller_generator -- --ignored"
+step "Tests: Seeds" "LOCO_ENV=test cargo loco db seed --reset"
+
+step "Build: client assets" "npx vite build"
+step "Build: SSR bundle" "npx vite build --ssr"
+step "Build: release binary" "cargo build --release"
+step "Tests: System (Playwright)" "CI=1 npx playwright test"
+
+# Optional: set a green GitHub commit status to unblock PR merge.
+# Requires the `gh` CLI and `gh extension install basecamp/gh-signoff`.
+# step "Signoff: All systems go. Ready for merge and deploy." "gh signoff"
+
+printf '\n\033[1;32m✓ CI passed in %ss\033[0m\n' "$((SECONDS - started))"

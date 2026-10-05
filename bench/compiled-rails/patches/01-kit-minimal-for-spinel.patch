@@ -1,0 +1,26 @@
+diff --git a/app/controllers/application_controller.rb b/app/controllers/application_controller.rb
+index 09f3793..e7db7f0 100644
+--- a/app/controllers/application_controller.rb
++++ b/app/controllers/application_controller.rb
+@@ -21,7 +21,8 @@ class ApplicationController < ActionController::Base
+   end
+ 
+   def perform_authentication
+-    Current.session ||= Session.find_by_id(cookies.signed[:session_token])
++    Current.session = Session.find_by(id: cookies.signed[:session_token]) if Current.session.nil?
++    Current.session
+   end
+ 
+   def set_current_request_details
+diff --git a/sig/current.rbs b/sig/current.rbs
+new file mode 100644
+index 0000000..04c6385
+--- /dev/null
++++ b/sig/current.rbs
+@@ -0,0 +1,6 @@
++class Current
++  def session: () -> Session?
++  def session=: (Session? value) -> Session?
++  def self.session: () -> Session?
++  def self.session=: (Session? value) -> Session?
++end

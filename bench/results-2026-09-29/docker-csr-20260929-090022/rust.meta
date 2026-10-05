@@ -1,0 +1,4 @@
+boot_ms=144
+idle_mib=40
+peak_mib=67
+signin_ms=48

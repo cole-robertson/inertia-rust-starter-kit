@@ -1,0 +1,47 @@
+# Docker Compose on any server with Docker: the app, its SQLite storage on a named volume, and
+# optionally Caddy in front for HTTPS. See docs/DEPLOY.md, "Docker Compose".
+#
+#   cp deploy/compose/.env.example deploy/compose/.env   # then fill it in
+#   docker compose -f deploy/compose/compose.yaml up -d --build
+#   docker compose -f deploy/compose/compose.yaml --profile tls up -d --build   # with Caddy
+#
+# SQLite: run exactly one app container per volume (never `--scale app=2`).
+name: inertia-rust-starter-kit
+
+services:
+  app:
+    build:
+      context: ../..
+    image: inertia-rust-starter-kit
+    restart: unless-stopped
+    # SECRET_KEY_BASE, HOST, MAILER_* and the rest (see .env.example).
+    env_file: .env
+    volumes:
+      - storage:/app/storage
+    # Without Caddy, the app is published on APP_PORT (default 8080) for a reverse proxy you
+    # already run. Bind it to 127.0.0.1 so only that proxy can reach it: the app trusts the
+    # rightmost X-Forwarded-For entry as the client IP.
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:80"
+
+  # `--profile tls`: Caddy gets a certificate for DOMAIN and proxies to the app.
+  caddy:
+    image: caddy:2
+    profiles: [tls]
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  storage:
+  caddy_data:
+  caddy_config:

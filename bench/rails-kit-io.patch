@@ -1,0 +1,94 @@
+diff --git c/app/controllers/bench_controller.rb i/app/controllers/bench_controller.rb
+new file mode 100644
+index 0000000..aa56286
+--- /dev/null
++++ i/app/controllers/bench_controller.rb
+@@ -0,0 +1,27 @@
++# frozen_string_literal: true
++
++# Benchmark-only endpoints (inertia-rust-starter-kit bench/rails-kit-io.patch). The Rust kit
++# serves the same three from src/controllers/bench.rs.
++class BenchController < ApplicationController
++  skip_forgery_protection
++  skip_before_action :authenticate
++
++  UPSTREAM = URI(ENV.fetch("BENCH_UPSTREAM_URL", "http://127.0.0.1:9900/slow?ms=100"))
++
++  # One HTTP GET to the mock upstream with stdlib Net::HTTP, like the app's API clients.
++  def upstream
++    res = Net::HTTP.get_response(UPSTREAM)
++    raise "upstream answered #{res.code}" unless res.is_a?(Net::HTTPSuccess)
++
++    render json: { ok: true, upstream: JSON.parse(res.body) }
++  end
++
++  def write
++    event = BenchEvent.create!(payload: params.require(:payload))
++    render json: { ok: true, id: event.id }
++  end
++
++  def read
++    render json: { ok: true, count: BenchEvent.count, latest: BenchEvent.order(id: :desc).limit(20) }
++  end
++end
+diff --git c/app/models/bench_event.rb i/app/models/bench_event.rb
+new file mode 100644
+index 0000000..0bc9c19
+--- /dev/null
++++ i/app/models/bench_event.rb
+@@ -0,0 +1,4 @@
++# frozen_string_literal: true
++
++class BenchEvent < ApplicationRecord
++end
+diff --git c/config/routes.rb i/config/routes.rb
+index 19f5688..649d94d 100644
+--- c/config/routes.rb
++++ i/config/routes.rb
+@@ -26,6 +26,12 @@ Rails.application.routes.draw do
+ 
+   root "home#index"
+ 
++  scope :bench, controller: :bench do
++    get :upstream
++    post :write
++    get :read
++  end
++
+   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
+   get "up" => "rails/health#show", as: :rails_health_check
+ end
+diff --git c/db/migrate/20260928000003_create_bench_events.rb i/db/migrate/20260928000003_create_bench_events.rb
+new file mode 100644
+index 0000000..095f089
+--- /dev/null
++++ i/db/migrate/20260928000003_create_bench_events.rb
+@@ -0,0 +1,10 @@
++# frozen_string_literal: true
++
++class CreateBenchEvents < ActiveRecord::Migration[8.1]
++  def change
++    create_table :bench_events, id: :integer do |t|
++      t.text :payload, null: false
++      t.datetime :created_at, null: false
++    end
++  end
++end
+diff --git c/db/schema.rb i/db/schema.rb
+index 4d03bb5..35e2c6f 100644
+--- c/db/schema.rb
++++ i/db/schema.rb
+@@ -10,7 +10,12 @@
+ #
+ # It's strongly recommended that you check this file into your version control system.
+ 
+-ActiveRecord::Schema[8.1].define(version: 2025_08_01_153828) do
++ActiveRecord::Schema[8.1].define(version: 2026_09_28_000003) do
++  create_table "bench_events", force: :cascade do |t|
++    t.text "payload", null: false
++    t.datetime "created_at", null: false
++  end
++
+   create_table "sessions", force: :cascade do |t|
+     t.integer "user_id", null: false
+     t.string "user_agent"

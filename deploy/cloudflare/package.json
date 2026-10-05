@@ -1,0 +1,19 @@
+{
+  "name": "inertia-rust-cloudflare",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker + Container that serves the app (docs/DEPLOY_CLOUDFLARE.md)",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "0.3.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261005.1",
+    "@types/node": "24.19.0",
+    "cf": "1.0.0-beta.12",
+    "typescript": "7.0.2",
+    "wrangler": "4.147.0"
+  }
+}

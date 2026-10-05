@@ -1,0 +1,12 @@
+# Seeds (SPEC-C1): Acme (one = owner, two = member) and Globex (two = owner). The pending
+# invitation to three@example.com is created in `App::seed`, because it expires 7 days from now.
+- id: 1
+  name: Acme
+  slug: acme
+  created_at: "2025-08-01T12:00:00+00:00"
+  updated_at: "2025-08-01T12:00:00+00:00"
+- id: 2
+  name: Globex
+  slug: globex
+  created_at: "2025-08-01T12:00:00+00:00"
+  updated_at: "2025-08-01T12:00:00+00:00"

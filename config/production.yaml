@@ -1,0 +1,136 @@
+# Loco configuration: production.
+#
+# Anything that is a secret or an address takes no default: `get_env(name="X")`
+# without a `default` fails at startup if `X` is unset. A production app that
+# silently falls back to a development secret or a localhost database is worse
+# than one that refuses to boot.
+#
+# Required env (the Dockerfile / config/deploy.yml supply these):
+#   SECRET_KEY_BASE   >= 64 chars, e.g. `openssl rand -hex 64`
+#   HOST              public https URL, e.g. https://app.example.com
+#   DATABASE_URL      e.g. sqlite:///app/storage/production.sqlite?mode=rwc
+#   QUEUE_URL         e.g. sqlite:///app/storage/queue.sqlite?mode=rwc
+#
+# Optional:
+#   MAILER_HOST, MAILER_USER, MAILER_PASSWORD   SMTP (MAILER_PORT defaults to 587). Unset
+#                     MAILER_HOST: the app boots but sends no mail (see `mailer:` below).
+
+logger:
+  enable: true
+  pretty_backtrace: false
+  level: <%= get_env(name="LOG_LEVEL", default="info") %>
+  format: json
+
+server:
+  # No `X-Powered-By: loco.rs` header (Rails sends none).
+  ident: ""
+  port: <%= get_env(name="PORT", default="5150") %>
+  # 0.0.0.0: inside a container, a server bound to loopback is unreachable.
+  binding: <%= get_env(name="BINDING", default="0.0.0.0") %>
+  host: <%= get_env(name="HOST") %>
+  middlewares:
+    # Files in public/ (Vite output under /vite, icons, robots.txt, error
+    # pages) are served by the router fallback in src/inertia/public.rs, only
+    # when no route matched: /vite/* is cached immutably, other files for an
+    # hour, and a missing file is a real 404. Loco's static layer would serve
+    # public/404.html with a 200 and immutable caching instead.
+    static:
+      enable: false
+    secure_headers:
+      enable: false
+    fallback:
+      enable: false
+    # Client IP (rate limiting, session records) comes from the rightmost
+    # X-Forwarded-For entry. That assumes exactly ONE trusted hop: kamal-proxy
+    # in front of the app, appending the real peer address, and the app port
+    # not reachable except through it (config/deploy.yml publishes only the
+    # proxy). Anything to the left of that entry is client-controlled and
+    # ignored. If you add another proxy/CDN in front, have the innermost hop
+    # set the client IP itself, or pick its header (e.g. CfConnectingIp).
+    remote_ip:
+      enable: true
+      source: RightmostXForwardedFor
+    limit_payload:
+      enable: true
+      body_limit: 5mb
+    timeout_request:
+      enable: true
+      timeout: 30000
+    compression:
+      enable: <%= get_env(name="COMPRESSION", default="true") %>
+
+workers:
+  mode: BackgroundQueue
+
+queue:
+  kind: Sqlite
+  uri: <%= get_env(name="QUEUE_URL") %>
+  dangerously_flush: false
+
+# With MAILER_HOST set, mail goes out over SMTP and MAILER_USER / MAILER_PASSWORD are required.
+# Without it the app still boots, on Loco's stub transport: nothing is sent, each undelivered
+# message is logged (recipient and subject, never the link) and boot logs a warning. That makes
+# a first deploy work before SMTP is set up; sign-up then can't verify addresses.
+mailer:
+  stub: <%= get_env(name="MAILER_HOST", default="") == "" %>
+  smtp:
+    enable: <%= get_env(name="MAILER_HOST", default="") != "" %>
+    host: <%= get_env(name="MAILER_HOST", default='""') %>
+    port: <%= get_env(name="MAILER_PORT", default="587") %>
+    secure: <%= get_env(name="MAILER_SECURE", default="true") %>
+    auth:
+      user: <%= get_env(name="MAILER_USER") if get_env(name="MAILER_HOST", default="") != "" else '""' %>
+      password: <%= get_env(name="MAILER_PASSWORD") if get_env(name="MAILER_HOST", default="") != "" else '""' %>
+
+database:
+  uri: <%= get_env(name="DATABASE_URL") %>
+  enable_logging: <%= get_env(name="DB_LOGGING", default="false") %>
+  # Also the pool acquire timeout: 5 s (Rails' `timeout: 5000`) so a disk/cgroup I/O stall becomes a wait, not a 500.
+  connect_timeout: <%= get_env(name="DB_CONNECT_TIMEOUT", default="5000") %>
+  idle_timeout: <%= get_env(name="DB_IDLE_TIMEOUT", default="500") %>
+  min_connections: <%= get_env(name="DB_MIN_CONNECTIONS", default="1") %>
+  max_connections: <%= get_env(name="DB_MAX_CONNECTIONS", default="10") %>
+  # Convenient for single-instance deploys; turn off if you migrate as a
+  # separate release step.
+  auto_migrate: <%= get_env(name="DB_AUTO_MIGRATE", default="true") %>
+  dangerously_truncate: false
+  dangerously_recreate: false
+
+settings:
+  # Required; the app refuses to boot when it is shorter than 64 chars or is
+  # one of the development/test examples.
+  secret_key_base: <%= get_env(name="SECRET_KEY_BASE") %>
+  app_url: <%= get_env(name="HOST") %>
+  app_name: Inertia Rust Starter Kit
+  # Other hostnames this app answers on, comma-separated; each has its own session (host-only
+  # cookies). Empty: only app_url's host. See the deploy recipe, "More than one hostname".
+  extra_hosts: "<%= get_env(name="EXTRA_HOSTS", default="") %>"
+  # Who can sign up: open (anyone; without an invitation they get a personal account) or
+  # invitation_only (only through a pending invitation, with the address it was sent to).
+  sign_up: <%= get_env(name="SIGN_UP", default="open") %>
+  mail_from: <%= get_env(name="MAIL_FROM", default="from@example.com") %>
+  # Production refuses an http:// app_url. Set ALLOW_INSECURE_HTTP=true only
+  # to try a production build locally over plain http.
+  allow_insecure_http: <%= get_env(name="ALLOW_INSECURE_HTTP", default="false") %>
+  # Encrypt Inertia history state in the browser (like the Rails kit in prod).
+  encrypt_history: true
+  forgery_protection: true
+  vite:
+    dev_server: false
+    dev_server_url: http://localhost:5173
+    manifest_path: public/vite/.vite/manifest.json
+  # Server-managed <head> tags (inertia-rails' config.server_head). true: tags go to
+  # the client as HTML in the `head` prop, SSR renders them and every navigation
+  # updates them. Build the client with the same VITE_INERTIA_SERVER_HEAD.
+  server_head: <%= get_env(name="VITE_INERTIA_SERVER_HEAD", default="false") %>
+  ssr:
+    # Off by default: pages render in the browser. To opt in, build the image with
+    # `--build-arg SSR_ENABLED=true` (the Dockerfile then also sets SSR_ENABLED=true at run
+    # time); without ssr/ssr.js the app logs once and renders client-side.
+    enabled: <%= get_env(name="SSR_ENABLED", default="false") %>
+    # Spawn and supervise `node ssr/ssr.js` from the app process.
+    spawn: <%= get_env(name="SSR_SPAWN", default="true") %>
+    node: <%= get_env(name="SSR_NODE", default="node") %>
+    bundle: ssr/ssr.js
+    url: <%= get_env(name="SSR_URL", default="http://127.0.0.1:13714/render") %>
+    timeout_ms: <%= get_env(name="SSR_TIMEOUT_MS", default="1500") %>

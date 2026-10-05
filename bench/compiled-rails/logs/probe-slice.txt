@@ -1,0 +1,39 @@
+[rails] GET /up               -> 200 
+[rails] GET /sign_in (html)   -> 200  sessions/new auth.user=None 1731B
+[rails] GET /sign_in (xhr)    -> 200  sessions/new auth.user=None 223B
+[rails] old browser UA        -> 406    (Rails: 406)
+[rails] POST sign_in no token -> 422    (Rails: 422)
+[rails] POST sign_in w/ token -> 302 http://127.0.0.1:5340/dashboard
+[rails] POST sign_in UPPER    -> 302 http://127.0.0.1:5340/dashboard   (Rails, normalizes: /dashboard; without: /sign_in)
+[rails] GET /dashboard (html) -> 200  dashboard/index auth.user=bench@example.com 1884B
+[rails] GET /dashboard (xhr)  -> 200  dashboard/index auth.user=bench@example.com 376B
+[rails] forged session cookie -> 302 http://127.0.0.1:5340/sign_in   (must redirect to /sign_in)
+[rails] no cookie /dashboard  -> 302 http://127.0.0.1:5340/sign_in
+[rails] cookie=eyJfcmFpbHMiOnsibWVzc2Fn...
+
+[rh-ruby] GET /up               -> 200 
+[rh-ruby] GET /sign_in (html)   -> 200  sessions/new auth.user=None 1688B
+[rh-ruby] GET /sign_in (xhr)    -> 200  sessions/new auth.user=None 223B
+[rh-ruby] old browser UA        -> 200    (Rails: 406)
+[rh-ruby] POST sign_in no token -> 422    (Rails: 422)
+[rh-ruby] POST sign_in w/ token -> 302 http://127.0.0.1:5341/dashboard
+[rh-ruby] POST sign_in UPPER    -> 302 http://127.0.0.1:5341/sign_in   (Rails, normalizes: /dashboard; without: /sign_in)
+[rh-ruby] GET /dashboard (html) -> 200  dashboard/index auth.user=bench@example.com 1841B
+[rh-ruby] GET /dashboard (xhr)  -> 200  dashboard/index auth.user=bench@example.com 376B
+[rh-ruby] forged session cookie -> 302 http://127.0.0.1:5341/sign_in   (must redirect to /sign_in)
+[rh-ruby] no cookie /dashboard  -> 302 http://127.0.0.1:5341/sign_in
+[rh-ruby] cookie=eyJfcmFpbHMiOnsibWVzc2Fn...
+
+[rh-spinel] GET /up               -> 200 
+[rh-spinel] GET /sign_in (html)   -> 200  sessions/new auth.user=None 1688B
+[rh-spinel] GET /sign_in (xhr)    -> 200  sessions/new auth.user=None 223B
+[rh-spinel] old browser UA        -> 200    (Rails: 406)
+[rh-spinel] POST sign_in no token -> 422    (Rails: 422)
+[rh-spinel] POST sign_in w/ token -> 302 http://127.0.0.1:5342/dashboard
+[rh-spinel] POST sign_in UPPER    -> 302 http://127.0.0.1:5342/sign_in   (Rails, normalizes: /dashboard; without: /sign_in)
+[rh-spinel] GET /dashboard (html) -> 200  dashboard/index auth.user=bench@example.com 1841B
+[rh-spinel] GET /dashboard (xhr)  -> 200  dashboard/index auth.user=bench@example.com 376B
+[rh-spinel] forged session cookie -> 302 http://127.0.0.1:5342/sign_in   (must redirect to /sign_in)
+[rh-spinel] no cookie /dashboard  -> 302 http://127.0.0.1:5342/sign_in
+[rh-spinel] cookie=eyJfcmFpbHMiOnsibWVzc2Fn...
+

@@ -1,0 +1,2 @@
+real_blog (spinel) listening on http://0.0.0.0:5350, pid 996813
+  one green thread per connection; OS workers: 4 (SPINEL_WORKERS); processes: 1

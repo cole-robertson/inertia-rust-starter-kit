@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Boot the release binary against freshly built assets with a throwaway, migrated and
+# seeded database, for the Playwright system test (playwright.config.ts runs this as its
+# webServer, so `npx playwright test` is all you need).
+#
+#   PORT            port to listen on (default 5190, matching playwright.config.ts)
+#   E2E_BIN         binary to run (default target/release/inertia_rust_starter_kit-cli)
+#   E2E_SKIP_BUILD  set to 1 to reuse existing builds (playwright.config.ts sets it for
+#                   the second server so it doesn't rebuild assets under the first)
+#   SSR_ENABLED, SSR_SPAWN  passed through to config/test.yaml (both default false);
+#                   set both to true to render through the real ssr/ssr.js bundle
+#   MAILER_PORT     SMTP port mail is sent to (default 2525, e2e/mail-sink.ts, which
+#                   playwright.config.ts starts)
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+port="${PORT:-5190}"
+bin="${E2E_BIN:-target/release/inertia_rust_starter_kit-cli}"
+
+if [ "${E2E_SKIP_BUILD:-}" != 1 ]; then
+  # Incremental: near no-ops when CI / bin/ci already built these.
+  npx vite build
+  npx vite build --ssr
+  cargo build --release --locked
+fi
+
+if [ ! -x "$bin" ]; then
+  echo "bin/e2e-server: $bin not found; run: cargo build --release" >&2
+  exit 1
+fi
+if [ ! -f public/vite/.vite/manifest.json ]; then
+  echo "bin/e2e-server: public/vite/.vite/manifest.json not found; run: npx vite build" >&2
+  exit 1
+fi
+
+# A throwaway database per run (and per port, so the CSR and SSR servers don't
+# share one), isolated from the cargo test databases.
+db_dir="tmp/e2e/${port}"
+mkdir -p "$db_dir"
+rm -f "$db_dir"/*.sqlite* "$db_dir"/server.log
+export LOCO_ENV=test
+# Warnings and errors (a handler's 500, a slow pool acquire) go to $db_dir/server.log, which CI
+# keeps when the run fails; the console stays quiet.
+export LOG_FILE=true LOG_DIR="$db_dir" RUST_LOG="${RUST_LOG:-warn}"
+export DATABASE_URL="sqlite://${db_dir}/app.sqlite?mode=rwc"
+export QUEUE_URL="sqlite://${db_dir}/queue.sqlite?mode=rwc"
+# config/test.yaml recreates the schema on boot for cargo test; keep the seeded data here.
+export DB_DANGEROUSLY_RECREATE=false DB_DANGEROUSLY_TRUNCATE=false
+# A real pool, as a server has (production: 10). config/test.yaml's single connection suits cargo
+# test; behind a browser with live streams open, once that one connection was held, every other
+# request timed out acquiring it (500 ms) and the server answered 500 for the rest of the run.
+export DB_MAX_CONNECTIONS="${DB_MAX_CONNECTIONS:-4}"
+# Run the real CSRF + Origin checks, with app_url matching where the browser connects.
+export FORGERY_PROTECTION="${FORGERY_PROTECTION:-true}"
+export APP_URL="http://127.0.0.1:${port}"
+export SSR_ENABLED="${SSR_ENABLED:-false}" SSR_SPAWN="${SSR_SPAWN:-false}"
+if [ "$SSR_ENABLED" = true ] && [ ! -f ssr/ssr.js ]; then
+  echo "bin/e2e-server: SSR_ENABLED=true but ssr/ssr.js not found; run: npx vite build --ssr" >&2
+  exit 1
+fi
+
+"$bin" db migrate
+"$bin" db seed
+
+# config/test.yaml runs workers ForegroundBlocking, so no worker process. Mail goes over SMTP to
+# e2e/mail-sink.ts, where the specs read it back.
+export MAILER_STUB=false MAILER_PORT="${MAILER_PORT:-2525}"
+exec "$bin" start --no-banner --binding 127.0.0.1 --port "$port"

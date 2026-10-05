@@ -1,0 +1,1 @@
+run 2 order: slice-rails slice-rhruby slice-spinel blog-rails blog-rhruby blog-spinel blog-rhrust rust-kit rails-kit

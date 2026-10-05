@@ -1,0 +1,34 @@
+# Render Blueprint: the kit's Dockerfile as one web service with a persistent disk for SQLite.
+# See docs/DEPLOY.md, "Render". Config provided, not deployed by us.
+#
+#   cp deploy/render/render.yaml render.yaml   # Render reads it from the repository root
+#   then New > Blueprint in the Render dashboard, pick the repository, fill in the secrets.
+#
+# A persistent disk needs a paid instance type, and a service with a disk runs exactly ONE
+# instance (no scaling, no zero-downtime deploys), which is what SQLite needs anyway.
+services:
+  - type: web
+    name: inertia-rust-starter-kit
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /up
+    envVars:
+      # The image's DATABASE_URL and QUEUE_URL already point into /app/storage.
+      - key: PORT
+        value: "10000"
+      - key: SECRET_KEY_BASE
+        sync: false # set in the dashboard: bin/secret prints one
+      - key: HOST
+        sync: false # https://<service>.onrender.com or your domain
+      - key: MAILER_HOST
+        sync: false
+      - key: MAILER_USER
+        sync: false
+      - key: MAILER_PASSWORD
+        sync: false
+    disk:
+      name: storage
+      mountPath: /app/storage
+      sizeGB: 1

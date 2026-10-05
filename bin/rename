@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# Rename the app: crate, binary, database files, service names (Docker, Kamal, Cloudflare,
+# deploy/{compose,systemd,fly,render}), and the display name shown in the UI, page titles and mail.
+#
+#   bin/rename acme_crm "Acme CRM"            rename (the display name is optional)
+#   bin/rename --dry-run acme_crm "Acme CRM"  show what would change, change nothing
+#
+# The crate name may be given as acme_crm or acme-crm; the crate and binary use acme_crm, the
+# Docker image and Cloudflare Worker use acme-crm. The current names are read from Cargo.toml,
+# config/development.yaml and deploy/cloudflare, so renaming twice works. docs/ and bench/ are
+# left alone (they describe the kit), and so are links to the kit's GitHub repository.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+usage() {
+  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 64
+}
+
+dry_run=false
+args=()
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) dry_run=true ;;
+    -h | --help) usage ;;
+    -*) echo "Unknown option: $arg" >&2; usage ;;
+    *) args+=("$arg") ;;
+  esac
+done
+[ "${#args[@]}" -ge 1 ] && [ "${#args[@]}" -le 2 ] || usage
+
+new_snake="$(printf '%s' "${args[0]}" | tr '-' '_')"
+new_kebab="$(printf '%s' "$new_snake" | tr '_' '-')"
+if ! [[ "$new_snake" =~ ^[a-z][a-z0-9_]*[a-z0-9]$ ]]; then
+  echo "bin/rename: '${args[0]}' is not a valid crate name: use lowercase letters, digits and _ or -, starting with a letter" >&2
+  exit 1
+fi
+case "$new_snake" in
+  migration | test | tests | main | core | std | alloc | proc_macro | self | super | crate)
+    echo "bin/rename: '$new_snake' collides with a crate or Rust name already in use; pick another" >&2
+    exit 1
+    ;;
+esac
+
+new_display="${args[1]:-}"
+if [ -n "$new_display" ] && ! [[ "$new_display" =~ ^[A-Za-z0-9][A-Za-z0-9\ .-]*$ ]]; then
+  echo "bin/rename: display names may use letters, digits, spaces, '.' and '-' (edit config/*.yaml by hand for others)" >&2
+  exit 1
+fi
+
+old_snake="$(sed -n 's/^name = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+old_kebab="$(printf '%s' "$old_snake" | tr '_' '-')"
+old_display="$(sed -n 's/^  app_name: //p' config/development.yaml | head -1)"
+old_worker="$(sed -n 's/^  name: "\(.*\)",$/\1/p' deploy/cloudflare/cloudflare.config.ts 2>/dev/null | head -1)"
+if [ -z "$old_snake" ] || [ -z "$old_display" ]; then
+  echo "bin/rename: could not read the current name from Cargo.toml / config/development.yaml" >&2
+  exit 1
+fi
+
+# Where the names live. docs/, bench/ and the build briefs are history and stay as they are.
+roots=(Cargo.toml Cargo.lock package.json package-lock.json Dockerfile README.md AGENTS.md
+  config bin src tests e2e frontend migration deploy .kamal .github)
+existing=()
+for root in "${roots[@]}"; do
+  [ -e "$root" ] && existing+=("$root")
+done
+
+# old|new pairs, applied in this order as literal strings (never as regexes). The kebab form is
+# only replaced where the repo uses it for a service name: the Kamal build-cache image and the
+# Cloudflare Worker/Container names, never in links to the kit's GitHub repository.
+# The build-cache pair goes first: for a one-word name (`trackline`) the snake and kebab forms
+# are the same, and the snake pair would turn `trackline-build-cache` into `acme_crm-build-cache`.
+pairs=("$old_kebab-build-cache|$new_kebab-build-cache" "$old_snake|$new_snake")
+# The display name is replaced everywhere except the README, which describes and credits the
+# kit and the kits it ports; there only the title (below) changes.
+display_pair=""
+[ -n "$new_display" ] && display_pair="$old_display|$new_display"
+cloudflare_pair=""
+[ -n "$old_worker" ] && cloudflare_pair="$old_worker|$new_kebab"
+readme_title_pair="# $old_display|# ${new_display:-$old_display}"
+
+# rename_in FILE OLD NEW: replace every literal OLD with NEW; prints the count, changes nothing
+# when dry-running.
+rename_in() {
+  local file=$1 old=$2 new=$3 count
+  [ "$old" = "$new" ] && { echo 0; return; }
+  count="$(OLD="$old" perl -ne '$n += () = /\Q$ENV{OLD}\E/g; END { print $n + 0 }' "$file")"
+  if [ "$count" -gt 0 ] && [ "$dry_run" = false ]; then
+    OLD="$old" NEW="$new" perl -pi -e 's/\Q$ENV{OLD}\E/$ENV{NEW}/g' "$file"
+  fi
+  echo "$count"
+}
+
+changed=0
+total=0
+while IFS= read -r -d '' file; do
+  file_total=0
+  # The Cloudflare names first, for the same reason as the build cache above: with a one-word
+  # name the generic pair would give the Worker the snake_case name.
+  case "$file" in
+    deploy/cloudflare/*)
+      if [ -n "$cloudflare_pair" ]; then
+        n="$(rename_in "$file" "${cloudflare_pair%%|*}" "${cloudflare_pair#*|}")"
+        file_total=$((file_total + n))
+      fi
+      ;;
+    # Compose project/image, systemd unit and paths, Fly app, Render service: the kebab name.
+    # The binary (`<snake>-cli`) goes first so the kebab pair can't touch it.
+    deploy/compose/* | deploy/systemd/* | deploy/fly/* | deploy/render/*)
+      for pair in "$old_snake-cli|$new_snake-cli" "$old_kebab|$new_kebab"; do
+        n="$(rename_in "$file" "${pair%%|*}" "${pair#*|}")"
+        file_total=$((file_total + n))
+      done
+      ;;
+    # The README's systemd block: its paths and unit name are the kebab name. Before the generic
+    # pairs, for the same one-word reason; never the kebab name in the repository's URL.
+    README.md)
+      for prefix in "/opt/" "/etc/" "deploy/systemd/" "--now "; do
+        n="$(rename_in "$file" "$prefix$old_kebab" "$prefix$new_kebab")"
+        file_total=$((file_total + n))
+      done
+      ;;
+  esac
+  for pair in "${pairs[@]}"; do
+    n="$(rename_in "$file" "${pair%%|*}" "${pair#*|}")"
+    file_total=$((file_total + n))
+  done
+  if [ -n "$display_pair" ] && [ "$file" != README.md ]; then
+    n="$(rename_in "$file" "${display_pair%%|*}" "${display_pair#*|}")"
+    file_total=$((file_total + n))
+  fi
+  case "$file" in
+    README.md)
+      # Only the title line: the README also names the Rails and Laravel kits it ports. The
+      # kit's wordmark (line 1, then a blank line) sits above the title; it is the kit's logo,
+      # not the app's, so it goes with the old title.
+      title_at=1
+      head -1 "$file" | grep -q 'docs/logo/wordmark.svg' && title_at=3
+      title="$(sed -n "${title_at}p" "$file")"
+      if [ "$title" = "${readme_title_pair%%|*}" ] && [ "${readme_title_pair%%|*}" != "${readme_title_pair#*|}" ]; then
+        file_total=$((file_total + 1))
+        if [ "$dry_run" = false ]; then
+          AT="$title_at" NEW="${readme_title_pair#*|}" perl -ni -e 'if ($. == $ENV{AT}) { print "$ENV{NEW}\n" } elsif ($. > $ENV{AT}) { print }' "$file"
+        fi
+      fi
+      ;;
+  esac
+  if [ "$file_total" -gt 0 ]; then
+    printf '  %-48s %3d\n' "$file" "$file_total"
+    changed=$((changed + 1))
+    total=$((total + file_total))
+  fi
+done < <(find "${existing[@]}" -type f \
+  -not -path '*/node_modules/*' -not -path '*/target/*' -not -path '*/.git/*' \
+  -not -name '*.sqlite*' -not -name '*.png' -not -name '*.ico' \
+  -not -path bin/rename -not -path tests/rename.rs -print0 | sort -z)
+
+# The systemd unit's file name is the service name too.
+unit="deploy/systemd/$old_kebab.service"
+if [ -f "$unit" ] && [ "$old_kebab" != "$new_kebab" ]; then
+  printf '  %-48s %s\n' "$unit" "-> deploy/systemd/$new_kebab.service"
+  [ "$dry_run" = false ] && mv "$unit" "deploy/systemd/$new_kebab.service"
+fi
+
+verb=$([ "$dry_run" = true ] && echo "would change" || echo "changed")
+echo "bin/rename: ${old_snake} -> ${new_snake}${new_display:+, \"${old_display}\" -> \"${new_display}\"}: ${verb} ${total} occurrences in ${changed} files"
+
+if [ "$dry_run" = false ]; then
+  for f in "${old_snake}"_development.sqlite "${old_snake}"_test.sqlite; do
+    if [ -e "$f" ]; then
+      echo "note: $f is no longer used; bin/setup creates ${f/#$old_snake/$new_snake} (or rename the file and its -wal/-shm)"
+    fi
+  done
+  [ -d target ] && echo "note: the next cargo build relinks under the new binary name, target/*/${new_snake}-cli"
+  # The renamed package keeps the old name's place in Cargo.lock; cargo re-sorts it on the next
+  # build, which would put an 80-line move in the first commit after this one. `cargo metadata`
+  # writes the lock in cargo's order without resolving anything new (--offline: no versions
+  # change, nothing is downloaded), so before the first build it may not have the crates it needs.
+  if [ "$total" -gt 0 ] && [ -f Cargo.lock ]; then
+    if ! command -v cargo > /dev/null 2>&1; then
+      echo "note: cargo is missing, so Cargo.lock is not re-sorted; the first cargo build will move the renamed package" >&2
+    elif ! cargo metadata --offline --format-version 1 > /dev/null 2>&1; then
+      echo "note: Cargo.lock is not re-sorted (cargo has not downloaded this app's crates yet); after bin/setup run:" >&2
+      echo "      cargo metadata --offline --format-version 1 > /dev/null" >&2
+    fi
+  fi
+  # A different name moves `use` lines in rustfmt's order and changes which lines fit in
+  # Prettier's width, so the renamed tree is reformatted here instead of failing
+  # `cargo fmt --check` / `npm run format` (and landing in the first generator's diff).
+  # RENAME_NO_FORMAT=1 skips it (tests/rename.rs runs on a partial copy that can't be formatted).
+  if [ "$total" -gt 0 ] && [ -z "${RENAME_NO_FORMAT:-}" ]; then
+    if command -v cargo > /dev/null 2>&1 && command -v npm > /dev/null 2>&1; then
+      echo "Formatting the renamed files: cargo fmt, prettier"
+      cargo fmt --all
+      [ -x node_modules/.bin/prettier ] || npm ci --no-audit --no-fund --loglevel=error
+      npm run --silent format:fix -- --log-level warn
+    else
+      echo "note: cargo or npm is missing, so the renamed files are not reformatted; after bin/setup run:" >&2
+      echo "      cargo fmt --all && npm run format:fix" >&2
+    fi
+  fi
+  echo "Next: cargo build && cargo test, then commit. Domains are yours to set: config/deploy.yml, and for Cloudflare deploy/cloudflare/.env.local (from .env.example)."
+fi

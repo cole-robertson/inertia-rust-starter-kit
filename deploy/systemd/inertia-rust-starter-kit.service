@@ -1,0 +1,46 @@
+# The app as a plain systemd service: one release binary, no container. See docs/DEPLOY.md,
+# "Single binary + systemd". Install as /etc/systemd/system/inertia-rust-starter-kit.service.
+#
+# /opt/inertia-rust-starter-kit   the binary, config/ and public/ (read-only at run time)
+# /var/lib/inertia-rust-starter-kit   SQLite database and job queue (StateDirectory, kept across
+#                                     restarts and upgrades)
+# /etc/inertia-rust-starter-kit/env   SECRET_KEY_BASE, HOST, MAILER_* (see env.example)
+[Unit]
+Description=Inertia Rust Starter Kit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# A system user allocated by systemd for this service; it owns the StateDirectory.
+DynamicUser=yes
+StateDirectory=inertia-rust-starter-kit
+WorkingDirectory=/opt/inertia-rust-starter-kit
+Environment=LOCO_ENV=production
+# Loopback only: a reverse proxy (Caddy, nginx) on this host terminates TLS and forwards here.
+Environment=BINDING=127.0.0.1
+Environment=PORT=3000
+Environment=DATABASE_URL=sqlite:///var/lib/inertia-rust-starter-kit/production.sqlite?mode=rwc
+Environment=QUEUE_URL=sqlite:///var/lib/inertia-rust-starter-kit/queue.sqlite?mode=rwc
+EnvironmentFile=/etc/inertia-rust-starter-kit/env
+# Web server, job worker and scheduler (idle without `scheduler:` jobs) in one process;
+# migrations run on boot.
+ExecStart=/opt/inertia-rust-starter-kit/inertia_rust_starter_kit-cli start --all --no-banner
+Restart=always
+RestartSec=2
+TimeoutStopSec=30
+
+# Hardening: the app writes only to its StateDirectory.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+=> Booting Puma
+=> Rails 8.1.4 application starting in production 
+=> Run `bin/rails server --help` for more startup options
+[1031877] Puma starting in cluster mode...
+[1031877] * Puma version: 8.0.2 ("Into the Arena")
+[1031877] * Ruby version: ruby 4.0.6 (2026-07-14 revision 03b6d3f889) +YJIT +PRISM [x86_64-linux]
+[1031877] *  Min threads: 3
+[1031877] *  Max threads: 3
+[1031877] *  Environment: production
+[1031877] *   Master PID: 1031877
+[1031877] *      Workers: 4
+[1031877] *     Restarts: (✔) hot (✖) phased (✖) refork
+[1031877] * Preloading application
+[1031877] * Listening on http://127.0.0.1:5350
+[1031877] Use Ctrl-C to stop
+[1031877] - Worker 0 (PID: 1031987) booted in 0.0s, phase: 0
+[1031877] - Worker 1 (PID: 1031991) booted in 0.0s, phase: 0
+[1031877] - Worker 2 (PID: 1031999) booted in 0.0s, phase: 0
+[1031877] - Worker 3 (PID: 1032016) booted in 0.0s, phase: 0
+[1031877] === puma shutdown: 2026-09-29 05:20:06 -0500 ===
+[1031877] - Goodbye!
+[1031877] - Gracefully shutting down workers...
+Exiting

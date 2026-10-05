@@ -1,0 +1,43 @@
+# Fly.io: the kit's Dockerfile on one Machine with a volume for SQLite. See docs/DEPLOY.md,
+# "Fly.io". Config provided, not deployed by us.
+#
+#   cp deploy/fly/fly.toml fly.toml      # Fly reads it from the repository root
+#   fly apps create <app>                # a unique name; set `app` below to it
+#   fly volumes create storage --size 1 --region iad
+#   fly secrets set SECRET_KEY_BASE=$(bin/secret) HOST=https://<app>.fly.dev
+#   fly deploy --ha=false
+#
+# SQLite: exactly ONE Machine. Never `fly scale count 2`: a second Machine gets its own volume
+# and its own database. `--ha=false` stops the first deploy from creating a standby.
+app = "inertia-rust-starter-kit"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # The image's DATABASE_URL and QUEUE_URL already point into /app/storage.
+  PORT = "8080"
+
+[mounts]
+  source = "storage"
+  destination = "/app/storage"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Stopping when idle is fine (the data is on the volume); keep one Machine at most.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    timeout = "3s"
+    method = "GET"
+    path = "/up"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,0 +1,32 @@
+**/config/local.yaml
+**/config/*.local.yaml
+
+# Rust
+debug/
+target/
+!Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# SQLite databases (dev/test/queue)
+*.sqlite
+*.sqlite-*
+storage/
+
+# Node / Vite
+node_modules/
+public/vite/
+ssr/
+
+# Tests and tempfiles
+tmp/
+test-results/
+playwright-report/
+
+# Local env files
+.env*
+!.env.example
+bench/results/
+
+# wrangler / cf CLI local cache
+.cloudflare/

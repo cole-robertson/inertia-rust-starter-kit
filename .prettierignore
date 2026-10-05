@@ -1,0 +1,7 @@
+build
+coverage
+frontend/components/ui
+frontend/routes
+public/vite
+ssr
+target

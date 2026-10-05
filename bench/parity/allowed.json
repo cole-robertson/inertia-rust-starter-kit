@@ -1,0 +1,74 @@
+[
+  {
+    "match": "^GET [^:]* \\(html[^)]*\\) :: ?\\.head\\[1\\]$",
+    "reason": "csrf_meta_tags: Rails renders csrf-param/csrf-token meta tags nothing reads (Inertia sends the XSRF-TOKEN cookie as X-XSRF-TOKEN in both kits); this kit keeps its CSRF secret out of the HTML."
+  },
+  {
+    "match": "::\\.mails\\[\\d+\\]\\.(content_types|bodies\\.text/plain)$",
+    "reason": "Loco's mailer always sends multipart/alternative (text + html); the Rails kit sends html only. The HTML part is identical, the text part carries the same copy and link."
+  },
+  {
+    "match": "^DELETE /users (wrong|missing) challenge :: ?\\.page\\.props\\.errors\\.password_challenge$",
+    "reason": "Rails sends the string \"Password challenge is invalid\"; its own delete-user.tsx calls .map on it and the page crashes (TypeError, blank page, reproduced in Chromium). This kit sends [\"Password challenge is invalid\"], the shape the frontend expects."
+  },
+  {
+    "match": "^PATCH /settings/email null challenge :: ?\\.(page\\.props\\.errors\\.password_challenge|page\\.props\\.auth\\.user\\.email|page\\.flash|emails\\[\\d+\\]\\[\\d+\\])$",
+    "reason": "Security: with password_challenge: null Rails skips the challenge (with_defaults fills only a missing key; has_secure_password validates a non-nil challenge) and changes the email without the password. This kit rejects it as \"is invalid\"."
+  },
+  {
+    "match": "^headers: .* :: ?\\.headers\\.x-frame-options$",
+    "reason": "DENY instead of Rails' SAMEORIGIN, matching the CSP's frame-ancestors 'none': the kit's pages are never framed."
+  },
+  {
+    "match": "^headers: .* :: ?\\.headers\\.etag$",
+    "reason": "No ETag on dynamic pages: they carry per-request CSRF cookies and are private, must-revalidate; Rack::ETag only saves bandwidth after rendering the whole page anyway."
+  },
+  {
+    "match": "^headers: .* :: ?\\.headers\\.vary$",
+    "reason": "`accept-encoding` is added by the app's own compression layer (the Rails image compresses in Thruster, in front of Rails, so the app's responses don't vary)."
+  },
+  {
+    "match": "^headers: (404|public file) :: ?\\.headers\\.(x-content-type-options|referrer-policy|x-xss-protection|x-permitted-cross-domain-policies)$",
+    "reason": "The security headers go on every response, including public files and 404s (Rails' static file server and exceptions app skip them). Stricter, never weaker."
+  },
+  {
+    "match": "^headers: 404 :: ?\\.headers\\.(cache-control|content-type)$",
+    "reason": "A 404 is `no-cache` so a CDN never caches a missing asset as if it existed; charset spelled `utf-8` (Rails' PublicExceptions writes `UTF-8`, the same charset)."
+  },
+  {
+    "match": "^headers: public file :: ?\\.headers\\.cache-control$",
+    "reason": "robots.txt, icons and error pages aren't fingerprinted: one hour instead of one year, so a changed icon reaches returning visitors. Fingerprinted /vite/* assets are immutable for a year in both kits."
+  },
+  {
+    "match": "^POST /identity/password_reset (verified|unverified|unknown) :: ?\\.(location|page\\.component|page\\.url|page\\.flash\\.(notice|alert))$",
+    "reason": "Security: no account enumeration. Rails answers unknown/unverified emails with an alert on the reset form and verified ones with a notice on sign-in, which reveals whether a verified account exists. This kit gives every request the same reply (redirect to sign-in with one neutral notice); only verified accounts get the mail."
+  },
+  {
+    "match": "^GET verification link again \\(still valid\\) :: ?\\.(location|page\\.component|page\\.url|page\\.flash\\.(notice|alert))$",
+    "reason": "Security: verification links are single-use. Rails binds the token to the email only, so a used link keeps 'verifying' until it expires; here verify only succeeds while the user is unverified, so a reused link is 'invalid'."
+  },
+  {
+    "match": "^(GET|POST|PATCH|PUT|DELETE) .* :: ?\\.page\\.(sharedProps|onceProps|props\\.accounts)$",
+    "reason": "Organizations (docs/PARITY.md#organizations-a-deliberate-addition): every signed-in page carries the account switcher, the shared once prop `accounts` [{name, slug}]."
+  },
+  {
+    "match": "^(POST /sign_up (valid \\(normalized email\\)|bob)|POST /sign_in (second browser|right \\(unnormalized email\\)|with reset password|\\(signed in\\))|GET /sign_(in|up) \\(signed in\\)|GET / \\(signed in\\)|GET /dashboard|GET /dashboard \\(html\\)|POST /identity/email_verification \\(resend, no referer\\)) :: ?\\.(status|location|head|page\\.(url|component|deferredProps|props\\.(account|membership)))$",
+    "reason": "Organizations: sign-in, sign-up, `/` and `/dashboard` land on the user's account overview `/{account_slug}` (component accounts/show, deferred members_count) instead of the Rails kit's dashboard or home page. Same flash texts and mail."
+  },
+  {
+    "match": "^(GET /nope \\((404|json)\\)|headers: 404|HEAD /nope) :: ?\\.(status|body\\.(bytes|text|title|json|type))$",
+    "reason": "Organizations: `/nope` has the shape of an account slug, so it matches `/{account_slug}` and a guest is sent to sign in (302), as on any signed-in page; a signed-in non-member gets the 404 page. Unknown paths that can't be a slug (`/robots.txt`, `/a`, two segments) still 404 as in Rails."
+  },
+  {
+    "match": "^GET (/|/sign_in|/sign_up|/identity/password_reset/new) \\(html(, guest)?\\) :: ?\\.head\\[2\\]$",
+    "reason": "Asset tags: with the account pages in the build, Rolldown splits frontend/lib/browser.ts (one line, `isBrowser`) into its own 39-byte chunk that the entry imports, so the entry has one more `modulepreload` link. Same stylesheet and entry script; nothing else in the head changes."
+  },
+  {
+    "match": "^GET [^:]* \\(html[^)]*\\) :: ?\\.head\\[0\\]$",
+    "reason": "Branding: the default app name (settings.app_name, the <title>) is \"Inertia Rust Starter Kit\" instead of the Rails kit's \"React Starter Kit\". bin/rename replaces it. The application-name meta tag carries the same name; it sits in head[1], already allowed above."
+  },
+  {
+    "match": "^GET /icon\\.(png|svg) :: ?\\.bytes$",
+    "reason": "Branding: the kit's own favicon (an orange gear with two purple motion bars on a dark tile, the 16 px-safe version of frontend/components/app-logo-icon.tsx) instead of the Rails kit's red circle. Same paths, types and caching."
+  }
+]

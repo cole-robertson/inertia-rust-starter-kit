@@ -1,0 +1,5 @@
+# /etc/caddy/Caddyfile: HTTPS for your domain (Let's Encrypt), proxied to the app on loopback.
+app.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}

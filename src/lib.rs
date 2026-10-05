@@ -1,0 +1,14 @@
+pub mod app;
+pub mod auth;
+pub mod channels;
+pub mod controllers;
+pub mod db;
+pub mod generate;
+pub mod inertia;
+pub mod live;
+pub mod mailers;
+pub mod models;
+pub mod route_table;
+pub mod start;
+pub mod tasks;
+pub mod workers;
