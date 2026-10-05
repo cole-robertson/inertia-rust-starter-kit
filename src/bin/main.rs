@@ -1,4 +1,4 @@
-use inertia_rust_starter_kit::{app::App, generate, start};
+use inertia_rust_starter_kit::{app::App, db, generate, start};
 use loco_rs::{app::Hooks, cli, environment::resolve_from_env};
 use migration::Migrator;
 
@@ -46,6 +46,13 @@ async fn main() -> loco_rs::Result<()> {
                 std::process::exit(2);
             }
         }
+    }
+    // `db reset` / `db seed --reset` on a one-connection pool, so sea-orm-migration's
+    // `foreign_keys = OFF` holds for every table it drops (src/db.rs, `drops_every_table`).
+    // Every config/*.yaml reads `max_connections` from DB_MAX_CONNECTIONS. Set before Loco reads
+    // the config, while no other thread reads the environment.
+    if db::drops_every_table(&args) {
+        std::env::set_var("DB_MAX_CONNECTIONS", "1");
     }
     // `start --all` with no `scheduler:` jobs: the same command without the scheduler, which
     // Loco would refuse to start (src/start.rs). Jobs in a mode that never runs them: a warning.

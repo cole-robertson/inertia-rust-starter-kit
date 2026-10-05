@@ -39,6 +39,30 @@ pub async fn begin_write<C: TransactionTrait>(
     .await
 }
 
+/// Whether `args` (the full command line, binary first) is `db reset` or `db seed --reset`:
+/// the commands that drop every table. `src/bin/main.rs` runs them on one connection.
+///
+/// sea-orm-migration (2.0.4) drops the tables after `PRAGMA foreign_keys = OFF`, but sends the
+/// PRAGMA and each `DROP TABLE` through the pool, and a PRAGMA only holds on the connection that
+/// ran it. A drop that lands on another connection still checks foreign keys and fails with
+/// `no such table: main.users` (about 3 runs in 100 on a 5-connection pool, none on one).
+#[must_use]
+pub fn drops_every_table(args: &[String]) -> bool {
+    let Some(db) = crate::start::subcommand(args).filter(|&i| args[i] == "db") else {
+        return false;
+    };
+    let rest = &args[db + 1..];
+    match rest
+        .iter()
+        .find(|a| !a.starts_with('-'))
+        .map(String::as_str)
+    {
+        Some("reset") => true,
+        Some("seed") => rest.iter().any(|a| a == "--reset" || a == "-r"),
+        _ => false,
+    }
+}
+
 /// Rails 8 / Loco values: WAL, `synchronous=NORMAL` (durable in WAL except on power loss,
 /// never corrupt), 5 s busy wait instead of failing with `SQLITE_BUSY`, 128 MB mmap, a 64 MB
 /// WAL size cap after checkpoints, and a 2,000-page cache.
@@ -185,5 +209,32 @@ where
         db: &C,
     ) -> std::result::Result<Option<Self::Item>, DbErr> {
         Ok(self.all(db).await?.into_iter().next())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::drops_every_table;
+
+    fn args(line: &str) -> Vec<String> {
+        line.split(' ').map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn reset_and_seed_reset_drop_every_table() {
+        assert!(drops_every_table(&args("cli db reset")));
+        assert!(drops_every_table(&args("cli db seed --reset")));
+        assert!(drops_every_table(&args("cli -e test db seed -r")));
+        assert!(drops_every_table(&args(
+            "cli db seed --from src/fixtures --reset"
+        )));
+    }
+
+    #[test]
+    fn other_commands_keep_the_pool() {
+        assert!(!drops_every_table(&args("cli db seed")));
+        assert!(!drops_every_table(&args("cli db migrate")));
+        assert!(!drops_every_table(&args("cli start --all")));
+        assert!(!drops_every_table(&args("cli task reset")));
     }
 }

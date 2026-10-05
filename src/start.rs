@@ -19,7 +19,7 @@ pub enum Scheduler {
 }
 
 /// The index of the subcommand in `args` (binary first), skipping `-e <env>`.
-fn subcommand(args: &[String]) -> Option<usize> {
+pub(crate) fn subcommand(args: &[String]) -> Option<usize> {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
