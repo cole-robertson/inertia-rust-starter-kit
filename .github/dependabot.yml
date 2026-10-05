@@ -5,6 +5,13 @@ updates:
   schedule:
     interval: weekly
   open-pull-requests-limit: 10
+  ignore:
+    # loco-rs re-exports these through its prelude and testing helpers, so the app has to use
+    # the same major version as Loco. They move when Loco does.
+    - dependency-name: axum-test
+      update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    - dependency-name: validator
+      update-types: ["version-update:semver-major", "version-update:semver-minor"]
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
@@ -12,5 +19,18 @@ updates:
   open-pull-requests-limit: 10
 - package-ecosystem: npm
   directory: "/"
+  schedule:
+    interval: weekly
+  ignore:
+    # The runtime is Node 22 (.node-version); its types stay on 22.x.
+    - dependency-name: "@types/node"
+      update-types: ["version-update:semver-major"]
+    # ESLint 10 waits for eslint-plugin-import to accept it as a peer.
+    - dependency-name: eslint
+      update-types: ["version-update:semver-major"]
+    - dependency-name: "@eslint/js"
+      update-types: ["version-update:semver-major"]
+- package-ecosystem: npm
+  directory: "/deploy/cloudflare"
   schedule:
     interval: weekly
