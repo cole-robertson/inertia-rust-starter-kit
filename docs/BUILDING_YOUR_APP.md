@@ -51,8 +51,13 @@ bin/setup      # npm ci, cargo build, migrate, seed, then bin/dev
 Open http://localhost:5150 and sign in as `one@example.com` / `Secret1*3*5*`. You land in the
 seeded account Acme at `/acme`; the sidebar's switcher also shows any other account you're in
 (sign in as `two@example.com` to see Acme and Globex). On a fresh machine
-the first `bin/setup` takes about 2.5 minutes (the Rust build); after that `bin/dev` starts in
-seconds.
+the first `bin/setup` takes about 1 to 3 minutes, depending on the machine (the Rust build); after
+that `bin/dev` starts in seconds.
+
+Rename (step 1) before this first `bin/setup`. The development database is named after the app,
+so after a later rename the app starts on a new, empty database, `bin/setup` leaves it unseeded
+(it only seeds a database it creates), and the seeded logins don't work. If that happened, run
+`bin/setup --reset`: it drops and re-seeds the new database.
 
 ## 3. Branding
 
@@ -180,7 +185,8 @@ non-root user). SQLite lives in `/app/storage`; migrations run on boot.
    `builder.cache.image` (`your-user/acme-crm-build-cache`).
 2. Secrets via `.kamal/secrets`: `SECRET_KEY_BASE` (`bin/secret`), `KAMAL_REGISTRY_PASSWORD`,
    `MAILER_PASSWORD`.
-3. `kamal setup` once, then `kamal deploy`. Details in the README, "Deploying with Kamal".
+3. `kamal setup` once, then `kamal deploy`. Details in the README's
+   [Deploy](../README.md#deploy) section, "Kamal, on your own server".
 
 **Cloudflare Containers** (what runs the kit's demo, https://rust.rebulk.com):
 `deploy/cloudflare/` is a Worker that forwards to one container running the image. Its
@@ -214,8 +220,10 @@ Recipe: [deploy.md](../.claude/skills/starter-kit/recipes/deploy.md).
 bin/ci      # fmt, clippy, eslint, prettier, tsc, fresh routes, cargo deny, npm audit, tests, builds, Playwright
 ```
 
-It needs `cargo-deny` and Playwright's Chromium (section 0). A fresh clone with two generated
-resources passes in about 5 minutes on a fast machine, 4 of them the release build.
+It needs `cargo-deny`, sea-orm-cli and Playwright's Chromium (section 0). A fresh clone with two
+generated resources passes in about 5 minutes on a fast machine, most of it in
+`Tests: generated code builds` (it generates code in a copy of the app and builds and tests that
+copy).
 `cargo deny` also fails when a crate in `Cargo.lock` is yanked upstream, even with no code
 change; `cargo update -p <crate>` (it names the crate) fixes that.
 

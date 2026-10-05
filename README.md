@@ -64,13 +64,19 @@ routes and tests. The generated page also has the app layout and buttons.
 ## Quick start
 
 You need Rust ([rustup](https://rustup.rs); `rust-toolchain.toml` pins the version) and the Node
-version in `.node-version`.
+version in `.node-version` (22). mise doesn't read `.node-version` unless you turn that on, so run
+`mise use node@22` in the app (or `nvm use`).
 
 ```sh
 git clone https://github.com/cole-robertson/inertia-rust-starter-kit.git myapp
 cd myapp
-bin/setup      # npm ci, cargo build, migrate, seed, then bin/dev
+bin/rename my_app "My App"   # optional, but do it before the first bin/setup (see below)
+bin/setup                    # npm ci, cargo build, migrate, seed, then bin/dev
 ```
+
+Rename before the first `bin/setup`: the development database is named after the app, so a
+rename afterwards leaves the seeded one behind. If you already ran setup, run
+`bin/setup --reset` after renaming to create and seed the new one.
 
 Open http://localhost:5150 and sign in as `one@example.com` / `Secret1*3*5*`. You land in the
 seeded account **Acme** at `/acme`. two@example.com is a member of Acme and owns **Globex**.
@@ -150,6 +156,8 @@ links its recipe in `.claude/skills/starter-kit/recipes/`.
 bin/rename --dry-run acme_crm "Acme CRM"   # show what changes
 bin/rename acme_crm "Acme CRM"
 ```
+
+Renamed after `bin/setup`? Run `bin/setup --reset` once: the development database has a new name.
 
 **Scaffold a resource.** It lives under `/{account_slug}/projects`, and every query is scoped to
 the account (`--global` opts out). The generators need `cargo install --locked sea-orm-cli@2.0.4`.
@@ -254,7 +262,8 @@ npx playwright test   # against the release binary (bin/e2e-server), client- and
 bin/ci                # the same steps as GitHub Actions
 ```
 
-`bin/ci` needs `cargo install --locked cargo-deny` and `npx playwright install chromium` once.
+`bin/ci` needs `cargo install --locked cargo-deny`, `cargo install --locked sea-orm-cli@2.0.4`
+and `npx playwright install chromium` once.
 It also generates code in a copy of the app and checks that it builds and passes its own tests.
 When Playwright fails in CI, the traces and the servers' logs are uploaded as an artifact.
 
