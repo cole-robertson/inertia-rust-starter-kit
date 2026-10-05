@@ -9,6 +9,12 @@ Clone it, rename it, and build a multi-tenant web app. The pages are React and s
 server is one Rust binary with SQLite, a job queue and mail. There's no separate API: Inertia
 renders the pages from the server.
 
+**Accounts are built in.** Like most business software, data belongs to an account
+(organization), not to a single user: every user gets one, can create more, and invites others
+with roles. Routes live under `/{account_slug}/…`, every generated query is scoped to the
+current account, and anyone who isn't a member gets a 404. Don't need teams?
+[Flatten it](.claude/skills/starter-kit/recipes/accounts.md#single-user-apps).
+
 A controller loads the data and renders a React page with it as props:
 
 ```rust
@@ -104,9 +110,10 @@ and read it at http://localhost:8025.
 
 - Sign up, sign in, sign out, a sessions list with remote sign-out, email verification,
   password reset, profile / email / password settings, account deletion, light/dark/system theme.
-- Organizations: every user gets a personal account; accounts have members with roles
-  (`owner`, `admin`, `member`), email invitations and a switcher. Pages live under
-  `/{account_slug}/…`, and non-members get a 404.
+- Accounts (organizations), on by default: every user gets a personal account; accounts have
+  members with roles (`owner`, `admin`, `member`), email invitations and a switcher. Pages live
+  under `/{account_slug}/…`, scaffolds and channels are account-scoped, and non-members get a
+  404. One shared database; isolation is by `account_id` on every row and query.
 
 **Server**
 
