@@ -30,7 +30,14 @@ updates:
       update-types: ["version-update:semver-major"]
     - dependency-name: "@eslint/js"
       update-types: ["version-update:semver-major"]
+    # TypeScript 7 is outside typescript-eslint 8's peer range; it waits for typescript-eslint.
+    - dependency-name: typescript
+      update-types: ["version-update:semver-major"]
 - package-ecosystem: npm
   directory: "/deploy/cloudflare"
   schedule:
     interval: weekly
+  ignore:
+    # deploy.sh needs Node 22.18 or newer, not the newest Node; its types stay on 24.x.
+    - dependency-name: "@types/node"
+      update-types: ["version-update:semver-major"]
