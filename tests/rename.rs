@@ -28,6 +28,7 @@ const COPY: &[&str] = &[
     "deploy/render",
     "frontend/entrypoints/app.ts",
     "frontend/components/app-sidebar.tsx",
+    "SECURITY.md",
     "src/bin/main.rs",
     "tests/rename.rs",
     "tests/routes_fresh.rs",
@@ -89,10 +90,21 @@ fn crate_name(cargo_toml: &str) -> String {
 /// is (the renamed package already sits in sorted order, so the first build after a rename
 /// doesn't move it), and it holds the same lines as `before` with only the name changed (no
 /// version was resolved anew). `old_name` is the crate name `before` was written for.
+///
+/// `--filter-platform host-tuple`, as `bin/rename` runs it: offline, cargo has only this
+/// machine's crates after `cargo build` (CI's `cargo fetch` gets every platform's); it writes the
+/// same lock either way.
 fn assert_lock_is_cargos(root: &Path, before: &str, old_name: &str) {
     let renamed = read(root, "Cargo.lock");
     let out = Command::new(env!("CARGO"))
-        .args(["metadata", "--offline", "--format-version", "1"])
+        .args([
+            "metadata",
+            "--offline",
+            "--format-version",
+            "1",
+            "--filter-platform",
+            "host-tuple",
+        ])
         .current_dir(root)
         .output()
         .expect("cargo runs");
@@ -117,13 +129,42 @@ fn assert_lock_is_cargos(root: &Path, before: &str, old_name: &str) {
     assert_eq!(sorted(&renamed), sorted(before), "only the order changed");
 }
 
+/// The summary line's "<N> occurrences in <M> files".
+fn summary(out: &str) -> &str {
+    let line = out
+        .lines()
+        .find(|l| l.starts_with("bin/rename: "))
+        .unwrap_or_else(|| panic!("no summary line:\n{out}"));
+    line.split(" change ")
+        .nth(1)
+        .or_else(|| line.split(" changed ").nth(1))
+        .unwrap_or_else(|| panic!("no count in {line:?}"))
+}
+
+/// A dry run changes nothing, and its per-file counts and total are the real run's (overlapping
+/// pairs such as `<snake>-cli` and `<kebab>` in deploy/systemd are counted once).
 #[test]
-fn a_dry_run_reports_but_changes_nothing() {
+fn a_dry_run_reports_what_the_real_run_changes_and_changes_nothing() {
     let root = app_copy("dry");
     let before = read(&root, "Cargo.toml");
-    let out = rename(&root, &["--dry-run", "acme-crm", "Acme CRM"]);
-    assert!(out.contains("would change"), "{out}");
+    let dry = rename(&root, &["--dry-run", "acme-crm", "Acme CRM"]);
+    assert!(dry.contains("would change"), "{dry}");
     assert_eq!(read(&root, "Cargo.toml"), before);
+    let unit = format!(
+        "deploy/systemd/{}.service",
+        crate_name(&before).replace('_', "-")
+    );
+    assert!(root.join(&unit).exists(), "{unit} is not renamed");
+    let real = rename(&root, &["acme-crm", "Acme CRM"]);
+    let files = |out: &str| -> Vec<String> {
+        out.lines()
+            // "  <file>  <count>"; notes are indented further.
+            .filter(|l| l.starts_with("  ") && !l.starts_with("   "))
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(files(&dry), files(&real), "per-file counts");
+    assert_eq!(summary(&dry), summary(&real));
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -141,7 +182,9 @@ fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
     assert_lock_is_cargos(&root, &lock, &old_name);
     assert!(cargo.contains("default-run = \"acme_crm-cli\""));
     assert!(read(&root, "Cargo.lock").contains("name = \"acme_crm\""));
-    assert!(read(&root, "src/bin/main.rs").contains("use acme_crm::{app::App, generate, start};"));
+    assert!(
+        read(&root, "src/bin/main.rs").contains("use acme_crm::{app::App, db, generate, start};")
+    );
     assert!(read(&root, "tests/routes_fresh.rs").contains("use acme_crm::"));
     for env in ["development", "test", "production"] {
         assert!(read(&root, &format!("config/{env}.yaml")).contains("app_name: Acme CRM"));
@@ -177,6 +220,11 @@ fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
     );
     assert!(read(&root, "deploy/fly/fly.toml").contains("app = \"acme-crm\""));
     assert!(read(&root, "deploy/render/render.yaml").contains("name: acme-crm\n"));
+    let security = read(&root, "SECURITY.md");
+    assert!(
+        security.contains("(https://github.com/your-user/acme-crm/security/advisories/new)"),
+        "the app's vulnerability reports go to the app's repository, not the kit's: {security}"
+    );
 
     let readme = read(&root, "README.md");
     assert!(
@@ -217,6 +265,95 @@ fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
         "renaming is idempotent:\n{again}"
     );
     std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// The kit's names, as `bin/rename` finds them in the kit itself.
+const KIT_NAMES: [&str; 3] = [
+    "inertia_rust_starter_kit",
+    "inertia-rust-starter-kit",
+    "Inertia Rust Starter Kit",
+];
+
+/// Where the kit's names stay after a rename: history (`docs/`, `bench/`), the rename script and
+/// this test, and links to the kit's repository (the README's clone command, the header and
+/// sidebar links).
+const KEPT_UNDER: [&str; 4] = ["docs/", "bench/", "bin/rename", "tests/rename.rs"];
+const KIT_REPOSITORY: &str = "github.com/cole-robertson/inertia-rust-starter-kit";
+
+/// The whole app, renamed: no file outside [`KEPT_UNDER`] still names the kit. Copies every file
+/// git knows about (tracked, or new and not ignored), so a file added later is checked too.
+#[test]
+fn renaming_leaves_the_kits_names_only_in_history_and_links() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let listed = Command::new("git")
+        .args([
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ])
+        .current_dir(source)
+        .output();
+    let files = match listed {
+        Ok(out) if out.status.success() => out.stdout,
+        _ => {
+            eprintln!("SKIPPED: not a git checkout, so the files to rename can't be listed");
+            return;
+        }
+    };
+    let root = std::env::temp_dir().join(format!("irsk-rename-all-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let files: Vec<&str> = files
+        .split(|&b| b == 0)
+        .filter(|f| !f.is_empty())
+        .map(|f| std::str::from_utf8(f).expect("UTF-8 path"))
+        .filter(|f| source.join(f).is_file())
+        .collect();
+    for rel in &files {
+        copy(&source.join(rel), &root.join(rel));
+    }
+    rename(&root, &["acme-crm", "Acme CRM"]);
+
+    let mut left = Vec::new();
+    for entry in walk(&root) {
+        let rel = entry
+            .strip_prefix(&root)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        if KEPT_UNDER.iter().any(|kept| rel.starts_with(kept)) {
+            continue;
+        }
+        let text =
+            String::from_utf8_lossy(&std::fs::read(&entry).unwrap()).replace(KIT_REPOSITORY, "");
+        for (n, line) in text.lines().enumerate() {
+            if KIT_NAMES.iter().any(|name| line.contains(name)) {
+                left.push(format!("{rel}:{}: {}", n + 1, line.trim()));
+            }
+        }
+    }
+    std::fs::remove_dir_all(&root).unwrap();
+    assert!(
+        left.is_empty(),
+        "bin/rename left the kit's name in {} line(s); rename them in bin/rename, or add the \
+         path to KEPT_UNDER if it is history:\n{}",
+        left.len(),
+        left.join("\n")
+    );
+}
+
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            files.extend(walk(&path));
+        } else {
+            files.push(path);
+        }
+    }
+    files
 }
 
 #[test]

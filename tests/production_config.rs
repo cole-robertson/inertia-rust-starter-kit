@@ -82,7 +82,12 @@ fn deploys_start_the_scheduler_with_the_server_and_worker() {
         dockerfile.contains(r#"CMD ["/app/inertia_rust_starter_kit-cli", "start", "--all""#),
         "Dockerfile CMD"
     );
-    let unit = std::fs::read_to_string("deploy/systemd/inertia-rust-starter-kit.service").unwrap();
+    // The unit is named after the service (the kebab-case crate name), which bin/rename changes.
+    let unit = format!(
+        "deploy/systemd/{}.service",
+        env!("CARGO_PKG_NAME").replace('_', "-")
+    );
+    let unit = std::fs::read_to_string(&unit).unwrap_or_else(|e| panic!("{unit}: {e}"));
     assert!(
         unit.contains("inertia_rust_starter_kit-cli start --all "),
         "systemd ExecStart"
