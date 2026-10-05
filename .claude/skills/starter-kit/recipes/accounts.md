@@ -130,6 +130,26 @@ The names appear in tables, models, routes, pages and copy. Two ways:
   `cargo loco task routes:generate` and `bin/ci`. There is no script for it; most apps are
   better served by the first option.
 
+## Single-user apps
+
+Accounts stay in the kit; most apps keep them (they are cheap to keep and expensive to add to
+an app that already has data). If an app really has no teams, flatten them in this order, and
+keep the tables (every user still has exactly one personal account behind the scenes):
+
+1. **Generate new resources with `--global`** (`cargo loco generate scaffold notes body:text
+   --global`): plain signed-in routes, no `account_id`. Existing scoped resources can stay.
+2. **Hide the team UI** in `frontend/components/app-sidebar.tsx`: the `<AccountSwitcher />` in the
+   sidebar header and the "Members" entry in `mainNavItems`. Show them only when
+   `usePage().props.accounts` has more than one entry, or remove them. Their routes can stay.
+3. **Close the team entry points:** don't link `/accounts/new`, and leave invitations unused
+   (`SIGN_UP` stays `open`).
+4. **Optional:** send `/` and sign-in to a global page instead of `/{account_slug}`
+   (`controllers::members::home_path`).
+
+Run `bin/ci` after each step; the account tests keep passing because the model and routes are
+unchanged. Don't delete the account tables, `CurrentAccount` or the migrations: the scaffolds,
+`generate channel` and sign-up depend on them.
+
 ## Verify
 
 ```sh
