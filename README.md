@@ -9,6 +9,56 @@ Clone it, rename it, and build a multi-tenant web app. The pages are React and s
 server is one Rust binary with SQLite, a job queue and mail. There's no separate API: Inertia
 renders the pages from the server.
 
+A controller loads the data and renders a React page with it as props:
+
+```rust
+// src/controllers/projects.rs
+async fn index(
+    current: CurrentAccount,
+    State(ctx): State<AppContext>,
+    inertia: Inertia,
+) -> Result<Response> {
+    let projects: Vec<Value> = projects::Model::list(&ctx.db, current.account.id)
+        .await?
+        .iter()
+        .map(projects::Model::to_props)
+        .collect();
+    render(inertia, "projects/index", json!({ "projects": projects })).await
+}
+```
+
+```tsx
+// frontend/pages/projects/index.tsx
+import { Link } from "@inertiajs/react"
+
+import { useCurrentAccount } from "@/hooks/use-current-account"
+import { projects as routes } from "@/routes"
+
+interface Project {
+  id: number
+  name: string
+}
+
+export default function Projects({ projects }: { projects: Project[] }) {
+  const { slug: accountSlug } = useCurrentAccount()
+
+  return (
+    <ul>
+      {projects.map((project) => (
+        <li key={project.id}>
+          <Link href={routes.show({ accountSlug, id: project.id })}>
+            {project.name}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+`cargo loco generate scaffold projects name:string!` writes both, plus the model, migration,
+routes and tests. The generated page also has the app layout and buttons.
+
 ![The home page](docs/screenshots/home-desktop-light.png)
 
 ## Quick start
