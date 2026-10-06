@@ -10,8 +10,8 @@ server is one Rust binary with SQLite, a job queue and mail. There's no separate
 renders the pages from the server.
 
 **Accounts are built in.** Like most business software, data belongs to an account
-(organization), not to a single user: every user gets one, can create more, and invites others
-with roles. Routes live under `/{account_slug}/…`, every generated query is scoped to the
+(organization), not to a single user: everyone who signs up gets one (an invitation joins the
+inviter's account instead), can create more, and invites others with roles. Routes live under `/{account_slug}/…`, every generated query is scoped to the
 current account, and anyone who isn't a member gets a 404. Don't need teams?
 [Flatten it](.claude/skills/starter-kit/recipes/accounts.md#single-user-apps).
 
@@ -71,7 +71,7 @@ routes and tests. The generated page also has the app layout and buttons.
 
 You need Rust ([rustup](https://rustup.rs); `rust-toolchain.toml` pins the version) and the Node
 version in `.node-version` (22). mise doesn't read `.node-version` unless you turn that on, so run
-`mise use node@22` in the app (or `nvm use`).
+`mise use node@$(cat .node-version)` in the app (or `nvm use`).
 
 ```sh
 git clone https://github.com/cole-robertson/inertia-rust-starter-kit.git myapp
@@ -110,7 +110,8 @@ and read it at http://localhost:8025.
 
 - Sign up, sign in, sign out, a sessions list with remote sign-out, email verification,
   password reset, profile / email / password settings, account deletion, light/dark/system theme.
-- Accounts (organizations), on by default: every user gets a personal account; accounts have
+- Accounts (organizations), on by default: everyone who signs up gets a personal account (an
+  invited sign-up joins the inviter's account instead); accounts have
   members with roles (`owner`, `admin`, `member`), email invitations and a switcher. Pages live
   under `/{account_slug}/…`, scaffolds and channels are account-scoped, and non-members get a
   404. One shared database; isolation is by `account_id` on every row and query.
@@ -173,6 +174,9 @@ the account (`--global` opts out). The generators need `cargo install --locked s
 cargo loco generate scaffold projects name:string! description:text due_on:date
 cargo loco task scaffold:pages resource:projects
 ```
+
+Restart `bin/dev` to pick up the new routes (Rust has no autoloading), then open
+http://localhost:5150/acme/projects.
 
 A `references` column becomes a select and a "must exist" check:
 `cargo loco generate scaffold tasks title:string! project:references`.
@@ -436,4 +440,4 @@ The code in each path is the source of truth.
 ## License
 
 MIT; see [LICENSE](LICENSE). Portions come from the Inertia Rails React Starter Kit (MIT,
-Svyatoslav Kryukov).
+Copyright (c) 2026 Svyatoslav Kryukov); its license is reproduced in [NOTICE](NOTICE).
