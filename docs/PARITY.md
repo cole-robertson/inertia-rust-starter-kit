@@ -190,7 +190,7 @@ primitives, `application.css` and `types/globals.d.ts`.
 
 | area | Rails kit | this kit | status | fix? |
 |---|---|---|---|---|
-| `components/app-logo-icon.tsx` | Rails mark | orange gear in purple motion streaks (fixed colours) | intentional (the kit's own mark) | |
+| `components/app-logo-icon.tsx` | Rails mark | two violet chevrons in an orange gear (colour gradients, `useId()` ids; 2026-10-06) | intentional (the kit's own mark) | |
 | `pages/home/index.tsx` | Rails text, links | description, stack badges, server-timing, Loco/Inertia links | intentional (brief) | |
 | `components/app-header.tsx`, `app-sidebar.tsx` footer links | repo + inertia-rails.dev | this repo + loco.rs docs; `// scaffold:nav` marker | intentional (links point at this project; marker used by the generator) | |
 | `components/user-menu-content.tsx`, `types/index.ts` | `id: number` | `id: string` | intentional (session id as string) | |
@@ -230,7 +230,7 @@ primitives, `application.css` and `types/globals.d.ts`.
 | area | Rails kit | this kit | status | fix? |
 |---|---|---|---|---|
 | public/400, 404, 406-unsupported-browser, 422, 500 .html, robots.txt | R:public/* | K:public/* | same bytes (`cmp`) | |
-| public/icon.png, icon.svg | R:public/* | K:public/* | **intentional** (2026-10-04): the kit's own mark (2026-10-04: an orange gear with purple motion bars on a dark tile) instead of the Rails kit's red circle; same paths and types | no (allowed) |
+| public/icon.png, icon.svg | R:public/* | K:public/* | **intentional** (2026-10-04): the kit's own mark (2026-10-06: two violet chevrons in an orange gear, in colour on a transparent square; `icon.png` on white for the apple-touch icon) instead of the Rails kit's red circle; same paths and types | no (allowed) |
 | served on 404 | yes | yes | same | |
 | served on 400 / 406 / 422 / 500 | yes | yes | missing → fixed (see Controllers) | yes |
 | 404 `Cache-Control` / charset | none / `charset=UTF-8` | `no-cache` / `charset=utf-8` | intentional: a CDN must never cache a missing asset as if it existed; `utf-8` and `UTF-8` are the same charset | no (allowed) |
