@@ -76,7 +76,7 @@ features:
 </div>
 <div>
 <strong>Props from Rust to React</strong>
-<p>A controller passes props to <code>render(inertia, "projects/index", …)</code>. Routes are typed on both sides, generated from one route table.</p>
+<p>A controller passes props to <code>render(inertia, "projects/index", …)</code>. Their TypeScript types are generated from the Rust structs, and routes from one route table.</p>
 </div>
 <div>
 <strong>Mutations redirect</strong>

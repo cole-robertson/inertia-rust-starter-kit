@@ -18,7 +18,8 @@ inviter's account instead), can create more, and invites others with roles. Rout
 current account, and anyone who isn't a member gets a 404. Don't need teams?
 [Flatten it](.claude/skills/starter-kit/recipes/accounts.md#single-user-apps).
 
-A controller loads the data and renders a React page with it as props:
+A controller loads the data and renders a React page with it as props. The props are a Rust
+struct, and the page's TypeScript type is generated from it:
 
 ```rust
 // src/controllers/projects.rs
@@ -27,12 +28,19 @@ async fn index(
     State(ctx): State<AppContext>,
     inertia: Inertia,
 ) -> Result<Response> {
-    let projects: Vec<Value> = projects::Model::list(&ctx.db, current.account.id)
+    let projects: Vec<ProjectProps> = projects::Model::list(&ctx.db, current.account.id)
         .await?
         .iter()
         .map(projects::Model::to_props)
         .collect();
     render(inertia, "projects/index", json!({ "projects": projects })).await
+}
+
+// src/models/projects.rs
+#[derive(Serialize, TS)]
+pub struct ProjectProps {
+    pub id: i64,
+    pub name: String,
 }
 ```
 
@@ -42,13 +50,9 @@ import { Link } from "@inertiajs/react"
 
 import { useCurrentAccount } from "@/hooks/use-current-account"
 import { projects as routes } from "@/routes"
+import type { ProjectProps } from "@/types/generated/ProjectProps"
 
-interface Project {
-  id: number
-  name: string
-}
-
-export default function Projects({ projects }: { projects: Project[] }) {
+export default function Projects({ projects }: { projects: ProjectProps[] }) {
   const { slug: accountSlug } = useCurrentAccount()
 
   return (
@@ -66,7 +70,9 @@ export default function Projects({ projects }: { projects: Project[] }) {
 ```
 
 `cargo loco generate scaffold projects name:string!` writes both, plus the model, migration,
-routes and tests. The generated page also has the app layout and buttons.
+routes and tests. The generated page also has the app layout and buttons. Rename a field in
+`ProjectProps`, run `cargo loco task types:generate`, and `npm run check` points at every page
+still using the old name.
 
 ![The home page](docs/screenshots/home-desktop-light.png)
 

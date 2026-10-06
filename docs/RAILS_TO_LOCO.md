@@ -62,6 +62,7 @@ and not null. `references` is the exception: bare is `NOT NULL`, `references?` i
 | `rails runner 'Foo.bar'` | `cargo loco task <name> key:value` | Task arguments are `key:value` pairs, read with `vars.cli_arg("key")`. |
 | `rails routes` | `cargo loco routes` | What axum registered. The source of truth is `src/route_table.rs`. |
 | (js-routes / Typelizer) | `cargo loco task routes:generate` | Writes `frontend/routes/*.ts` from `src/route_table.rs`; `tests/routes_fresh.rs` fails if they drift. |
+| (Typelizer serializer types) | `cargo loco task types:generate` | Writes `frontend/types/generated/*.ts` from the props structs in `src/page_types.rs` (ts-rs); `tests/types_fresh.rs` fails if they drift. |
 | `rails middleware` | `cargo loco middleware` | |
 
 ## Jobs, mail, credentials

@@ -254,7 +254,7 @@ primitives, `application.css` and `types/globals.d.ts`.
 |---|---|---|---|---|
 | `bin/setup` (deps, db:prepare, `--reset`, clear logs/tmp, `--skip-server`, exec bin/dev) | R:bin/setup | K:bin/setup | same steps, plus a toolchain check | |
 | `bin/dev` (overmind/hivemind/foreman on Procfile.dev: web + vite) | R:bin/dev, Procfile.dev | K:bin/dev (starts both itself, no process manager) | intentional: no Ruby gem to install; same two processes | |
-| `bin/ci` / config/ci.rb steps | setup, rubocop, eslint, prettier, tsc, typelizer freshness, bundler-audit, npm audit, brakeman, rspec, seeds replant | setup, rustfmt, clippy, eslint, prettier, tsc, routes freshness, cargo-deny, npm audit, cargo test, seeds, builds, Playwright | same coverage with Rust tools (rubocop→fmt+clippy, bundler-audit+brakeman→cargo-deny+clippy, rspec→cargo test + Playwright) | |
+| `bin/ci` / config/ci.rb steps | setup, rubocop, eslint, prettier, tsc, typelizer freshness, bundler-audit, npm audit, brakeman, rspec, seeds replant | setup, rustfmt, clippy, eslint, prettier, tsc, routes and prop-types freshness, cargo-deny, npm audit, cargo test, seeds, builds, Playwright | same coverage with Rust tools (rubocop→fmt+clippy, bundler-audit+brakeman→cargo-deny+clippy, rspec→cargo test + Playwright) | |
 | gh-signoff comment | config/ci.rb | K:bin/ci | same | |
 | `.github/workflows/ci.yml` | scan_ruby, lint_js, lint, test | rust, routes, js, security, e2e | same coverage | |
 | `.github/workflows/deploy.yml` | Kamal, `if: false` | Kamal, `if: false` | same (off by default; the commented-out condition also requires a push to this repository's `main`) | |
