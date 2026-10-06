@@ -93,6 +93,18 @@ Coming from Rails? The kit follows the [Inertia Rails React Starter Kit](https:/
 
 <div class="home-section">
 
+## Get started
+
+Click [Use this template](https://github.com/cole-robertson/inertia-rust-starter-kit/generate) on GitHub, or clone it. You need Rust ([rustup](https://rustup.rs)) and Node 22.
+
+<<< @/snippets/quick-start.sh
+
+Open http://localhost:5150 and sign in as `one@example.com` / `Secret1*3*5*`. Then [build your app](/guide/building-your-app): rename it, scaffold a resource, add jobs and mail, deploy.
+
+</div>
+
+<div class="home-section">
+
 ## The numbers
 
 <p class="lede">Both kits as production Docker images on the same workstation, 4 pinned CPUs each, SQLite, SSR off, Rails with YJIT and Puma 4×3. Medians of 5 runs, 2026-10-04. <a href="/reference/benchmark">The full benchmark</a>.</p>
@@ -104,19 +116,6 @@ Coming from Rails? The kit follows the [Inertia Rails React Starter Kit](https:/
 <div class="stat"><div class="value">2.1 ms</div><div class="label">p99 on the signed-in page, vs 11.2 ms (5.4× lower)</div></div>
 <div class="stat"><div class="value">52 MB</div><div class="label">compressed Docker image, vs 207 MB</div></div>
 </div>
-
-
-</div>
-
-<div class="home-section">
-
-## Get started
-
-Click [Use this template](https://github.com/cole-robertson/inertia-rust-starter-kit/generate) on GitHub, or clone it. You need Rust ([rustup](https://rustup.rs)) and Node 22.
-
-<<< @/snippets/quick-start.sh
-
-Open http://localhost:5150 and sign in as `one@example.com` / `Secret1*3*5*`. Then [build your app](/guide/building-your-app): rename it, scaffold a resource, add jobs and mail, deploy.
 
 </div>
 
