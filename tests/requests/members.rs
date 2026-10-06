@@ -62,6 +62,38 @@ fn account_routes(slug: &str, member_id: i64) -> Vec<(&'static str, String, Valu
     ]
 }
 
+/// A page already open in an account the user was just removed from: its next Inertia visit
+/// (a click, a live reload) is sent home with an alert, not answered with the raw 404 page that
+/// Inertia would show in an error overlay. A full page load still gets the 404.
+#[tokio::test]
+#[serial]
+async fn an_inertia_visit_to_an_account_you_left_goes_home_with_an_alert() {
+    with_app(|mut server, ctx| async move {
+        sign_in(&mut server, &ctx, TWO).await; // in Acme (member) and Globex (owner)
+        inertia_get(&server, &ctx, "/acme/members").await;
+        memberships::Entity::delete_by_id(TWO_IN_ACME)
+            .exec(&ctx.db)
+            .await
+            .unwrap();
+
+        let res = server
+            .get("/acme/members")
+            .add_header("x-inertia", "true")
+            .add_header("x-inertia-version", asset_version(&ctx))
+            .add_header("x-requested-with", "XMLHttpRequest")
+            .await;
+        assert_redirect(&res, "/globex");
+        let page = inertia_get(&server, &ctx, "/globex").await;
+        assert_eq!(page["flash"]["alert"], "That account isn't available");
+
+        assert_eq!(
+            server.get("/acme/members").await.status_code(),
+            StatusCode::NOT_FOUND
+        );
+    })
+    .await;
+}
+
 #[tokio::test]
 #[serial]
 async fn a_non_member_gets_404_on_every_account_route_of_an_existing_account() {
