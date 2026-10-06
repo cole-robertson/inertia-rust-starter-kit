@@ -28,7 +28,7 @@ default to the account scope when run without them.
 | Template | Replaces Loco's | Writes |
 |---|---|---|
 | `scaffold/api/controller.t` | JSON API controller | `src/controllers/<plural>.rs` (Inertia `render` + `Redirect`); injects `src/controllers/mod.rs`, `src/app.rs`, and the paths + routes into `src/route_table.rs` |
-| `scaffold/api/dto.t` | the `ts-rs` DTO | `tests/requests/<plural>.rs`; fills `src/models/<plural>.rs` with `<Singular>Params`, casting + validation, finders, `create`/`update`/`destroy`, `to_props` |
+| `scaffold/api/dto.t` | Loco's scaffold DTO (its `ts-rs` request/response structs) | `tests/requests/<plural>.rs`; fills `src/models/<plural>.rs` with `<Singular>Params`, casting + validation, finders, `create`/`update`/`destroy`, and `to_props` returning `<Singular>Props` (`Serialize` + `ts_rs::TS`, the entity's field types), which it lists in `src/page_types.rs` above `// scaffold:types` |
 | `model/test.t` | model test using `insta` | `tests/models/<plural>.rs` without `insta` (not a kit dependency) |
 | `worker/{worker,test}.t` | the worker and its test | Loco's worker with `Default` derived on `WorkerArgs`, and a test that seeds and builds the args as `WorkerArgs::default()`, so it still compiles after you add fields (Loco's writes `WorkerArgs {}`) |
 | `task/test.t` | the task test | Loco's, with the seeds loaded before the task runs (as `model/test.t` does); the task itself is Loco's |
@@ -37,7 +37,7 @@ default to the account scope when run without them.
 | `controller/api/test.t` | a test expecting JSON at `/api/<name>` | `tests/requests/<name>.rs`: each page renders its component (`inertia_get`), each write redirects back and refuses Precognition, signed-out visitors go to sign in, a non-member gets 404; `mod` line with the others |
 | `controller/pages/page.t` | (none) | `frontend/pages/<name>/<action>.tsx`, one per component the controller renders, by `cargo loco task scaffold:pages controller:<name>` |
 | `channel/{channel,test}.t` | (none: Loco has no channel generator) | `cargo loco generate channel <name>`, rendered by `src/generate.rs`: `src/channels/<name>.rs` (registered in `src/channels/mod.rs`) and `tests/requests/<name>_channel.rs` |
-| `scaffold/pages/*.t` | (none: Loco can't write this kit's React) | `frontend/pages/<plural>/{index,show,new,edit,form}.tsx`, rendered by `cargo loco task scaffold:pages` (`src/tasks/scaffold_pages.rs`) |
+| `scaffold/pages/*.t` | (none: Loco can't write this kit's React) | `frontend/pages/<plural>/{index,show,new,edit,form}.tsx`, rendered by `cargo loco task scaffold:pages` (`src/tasks/scaffold_pages.rs`), which also runs `types:generate`; the pages import `@/types/generated/<Singular>Props` (and `SelectOption`) |
 
 The migration, entity and `src/models/<plural>.rs` skeleton come from Loco's own `model`
 templates unchanged.
@@ -65,7 +65,8 @@ a copy of this app and fails if an anchor stops matching, so a Loco upgrade that
 shows up in `cargo test`, not in a user's first scaffold. `tests/controller_generator.rs` does
 the same for `generate controller`, and its `--ignored` test (run by `bin/ci` and CI) runs the
 real `cargo loco generate` for two scaffolds (scoped, `--global`) and three controllers (pages,
-writes, nested) in a copy of the app, then clippy, their request tests, `tsc` and ESLint.
+writes, nested) in a copy of the app, then clippy, their request tests, `routes_fresh`,
+`types_fresh`, `tsc` and ESLint.
 
 The templates are Tera 1 (rrgen). In the `.tsx` templates a JSX `{` directly before a Tera
 `{{` is written `{ {{- x }}` or `{% raw %}{{% endraw %}`; `{{` alone would start a Tera tag.

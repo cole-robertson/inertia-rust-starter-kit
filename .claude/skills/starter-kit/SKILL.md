@@ -70,8 +70,10 @@ Human-facing docs: `docs/BUILDING_YOUR_APP.md` (the standard path), `docs/RAILS_
 5. **Signed-in pages take `Authenticated`** as their first extractor; it redirects to sign-in.
    Pages with account data live under `/{account_slug}` and take `CurrentAccount` instead; every
    query is scoped to `current.account.id`, so another account's id is a 404.
-6. **Never serialize an entity to the page.** Build props explicitly (`to_props()` in scaffolded
-   models) so a new column never leaks by accident.
+6. **Never serialize an entity to the page.** Build a props struct explicitly (`to_props()` →
+   `<Singular>Props` in scaffolded models) so a new column never leaks by accident. Its
+   TypeScript type is generated (`src/page_types.rs`, `cargo loco task types:generate`): pages
+   import `@/types/generated/<Name>`, never redeclare it.
 7. **Every new page or prop gets a budget test** (`tests/requests/budget.rs` helpers): which
    props it sends (`assert_props_exactly`), which are deferred or optional, how many SQL queries
    it runs (`assert_max_queries`), and, for a partial reload, that it sends only what was asked.

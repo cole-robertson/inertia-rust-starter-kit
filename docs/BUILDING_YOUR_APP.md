@@ -105,7 +105,11 @@ templates in `.loco-templates/`: migration, entity, a model with params, casting
 validation (`src/models/projects.rs`), an Inertia controller (`src/controllers/projects.rs`),
 paths and routes in `src/route_table.rs`, a model test and a request test. The second writes the
 React pages (`frontend/pages/projects/`, shadcn/ui forms), adds a sidebar link, and regenerates
-`frontend/routes/`. Restart `bin/dev` (new routes need a rebuild; Rust has no autoloading), then
+`frontend/routes/` and the prop types in `frontend/types/generated/`. The page props are a Rust
+struct, `ProjectProps` in `src/models/projects.rs`, and the pages import the TypeScript type
+generated from it: add a field there, run `cargo loco task types:generate`, and `npm run check`
+shows what to update ([Typed props](../.claude/skills/starter-kit/recipes/inertia-page.md#typed-props)).
+Restart `bin/dev` (new routes need a rebuild; Rust has no autoloading), then
 open http://localhost:5150/acme/projects.
 
 **The resource belongs to the account.** The kit adds `account:references` to the scaffold, so

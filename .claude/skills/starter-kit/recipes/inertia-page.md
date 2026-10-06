@@ -31,6 +31,8 @@ Then fill it in:
        render(inertia, "reports/index", json!({ "total": total })).await
    }
    ```
+   A record or a list of them goes through a props struct, so its TypeScript type is generated
+   (see [Typed props](#typed-props)).
 2. **Page**: type the props and render them.
    ```tsx
    export default function ReportsIndex({ total }: { total: number }) {
@@ -90,6 +92,45 @@ To add a page to an existing controller, add the path and route to `src/route_ta
 hand (as the generator does), the handler and `.add(..)`, then rerun
 `cargo loco task scaffold:pages controller:reports` for the new page.
 
+## Typed props
+
+A props struct is the page's contract: Rust builds it, and its TypeScript type is generated from
+it, so renaming or retyping a field fails `npm run check` instead of rendering `undefined`.
+
+```rust
+// src/models/reports.rs
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+pub struct ReportProps {
+    pub id: i64,
+    pub title: String,
+    pub closed_on: Option<Date>, // `string | null`
+}
+
+impl Model {
+    pub fn to_props(&self) -> ReportProps { ReportProps { id: self.id, title: self.title.clone(), closed_on: self.closed_on } }
+}
+```
+
+1. List it in `generate_ts` in `src/page_types.rs` (`types.add::<crate::models::reports::ReportProps>();`
+   above `// scaffold:types`; scaffolds add theirs there). Types it uses (an enum like `Role`)
+   are generated with it.
+2. `cargo loco task types:generate` writes `frontend/types/generated/ReportProps.ts`. Commit it;
+   `tests/types_fresh.rs` (in `bin/ci` and CI) fails when it is stale. Never edit those files.
+3. Send it: `render(inertia, "reports/show", json!({ "report": report.to_props() }))`, or
+   `Props::new().prop("report", Prop::serialize(&report.to_props())?)` next to lazy/deferred props.
+   `render` also takes any `Serialize` struct whose fields are the props.
+4. Import it in the page:
+   ```tsx
+   import type { ReportProps } from "@/types/generated/ReportProps"
+
+   export default function ReportShow({ report }: { report: ReportProps }) {
+   ```
+
+Field types: `i64`/`f64` are `number`, `Option<T>` is `T | null`, `Date` and the ISO strings
+from `models::as_json_time` are `string`, a serde `rename_all = "snake_case"` enum is a union of
+strings. `#[serde(rename_all = "camelCase")]` on the struct renames the TS fields too.
+A one-off scalar (`{ total: number }`, a flag) can stay `json!` with an inline TS type.
+
 ## Prop kinds
 
 `render(inertia, name, json!(..))` sends plain props. For the others, build `Props` and call
@@ -121,8 +162,9 @@ Closures are `'static`: clone what they need (`let db = ctx.db.clone();`) and `m
 closure runs only when its prop is sent.
 
 To add a **shared prop**, extend the closure in `auth::register_shared_props`: one
-`SharedProps` is stored, so a second `insert` would replace the `auth` prop. Add the key to
-`SharedProps` in `frontend/types/index.ts`.
+`SharedProps` is stored, so a second `insert` would replace the `auth` prop. Give it a props
+struct (`Prop::serialize(&value)?`, as `auth` and `accounts` do), list it in `src/page_types.rs`,
+and add the key with its generated type to `SharedProps` in `frontend/types/index.ts`.
 
 ## Verify
 

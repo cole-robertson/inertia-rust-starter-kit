@@ -31,7 +31,7 @@ Supported by the kit's forms: `string`, `text`, `int`, `big_int`, `small_int`, `
 `creator:references`; for a user write `users:references:creator_id`), is **left out** of the
 params, the props and the pages, and the generator and `scaffold:pages` print a note naming
 it. The column is still in the table: set it in the model (`create`, a model method) and add it
-to `to_props` if the page should see it. A required one must be set in `create`, or the insert
+to `ProjectProps` and `to_props` if the page should see it. A required one must be set in `create`, or the insert
 fails.
 
 ## What it writes
@@ -40,14 +40,14 @@ fails.
 |---|---|
 | `migration/src/m<ts>_projects.rs` (+ registered in `migration/src/lib.rs`) | Loco's model template |
 | `src/models/_entities/projects.rs` | `cargo loco db entities` (run for you) |
-| `src/models/projects.rs`: `ProjectParams` (never `account_id`), `assign` (casting + validation), `list(db, account_id)`, `find_in_account(db, account_id, id)`, `create(db, account_id, params)`, `update`, `destroy`, `to_props` | `.loco-templates/scaffold/api/dto.t` |
+| `src/models/projects.rs`: `ProjectParams` (never `account_id`), `assign` (casting + validation), `list(db, account_id)`, `find_in_account(db, account_id, id)`, `create(db, account_id, params)`, `update`, `destroy`, `to_props` and the `ProjectProps` struct (`Serialize` + `ts_rs::TS`, the entity's field types), registered in `src/page_types.rs` | `.loco-templates/scaffold/api/dto.t` |
 | `src/controllers/projects.rs`: index/show/new/edit/create/update/destroy, `CurrentAccount` (a non-member gets 404), every lookup through the account, precognition on create/update | `.loco-templates/scaffold/api/controller.t` |
 | `src/route_table.rs`: `PROJECTS = "/{account_slug}/projects"`, `NEW_PROJECT`, `PROJECT`, `EDIT_PROJECT`, `projects_path(slug)`, `new_project_path(slug)`, `project_path(slug, id)`, `edit_project_path(slug, id)`, seven routes | same |
 | `src/controllers/mod.rs`, `src/app.rs` registration | same |
 | `tests/requests/projects.rs` (sign-in redirect, full CRUD in Acme, **another account's project is a 404** through every action, blank-required errors) | `dto.t` |
 | `tests/models/projects.rs` | `.loco-templates/model/test.t` |
 | `frontend/pages/projects/{index,show,new,edit,form}.tsx`: the slug from `useCurrentAccount()`, `routes.show({ accountSlug, id })` | `scaffold:pages` from `.loco-templates/scaffold/pages/` |
-| sidebar link in the account's nav (`projects.index(account.slug)`) in `frontend/components/app-sidebar.tsx`; `frontend/routes/*.ts` | `scaffold:pages` |
+| sidebar link in the account's nav (`projects.index(account.slug)`) in `frontend/components/app-sidebar.tsx`; `frontend/routes/*.ts`; `frontend/types/generated/ProjectProps.ts`, which the pages import | `scaffold:pages` |
 
 With `--global` the same files have the unscoped shape: `Authenticated`, `find_by_id(db, id)`,
 `/projects/{id}`, `project_path(id)`, and the sidebar link goes in the global list
@@ -70,14 +70,16 @@ With `--global` the same files have the unscoped shape: `Authenticated`, `find_b
 - Scope further (to the owner, to a project's members) by adding to the model's finders: the
   generated ones are scoped to the account and nothing more.
 - Extra validations go in `ProjectParams::assign` (`errors.add("name", "is too long")`).
-- `to_props()` decides what reaches the browser; keep the TS `Project` interface in
-  `form.tsx` in step.
+- `to_props()` and `ProjectProps` decide what reaches the browser. The pages import the
+  TypeScript type generated from that struct: after changing it, run
+  `cargo loco task types:generate`, and `npm run check` shows every page the change breaks
+  ([Typed props](inertia-page.md#typed-props)).
 - To regenerate pages, delete them first: `scaffold:pages` never overwrites.
 
 ## Undo
 
 Delete the files in the table, the injected lines (`git diff` shows them), then
-`cargo loco db down` and `cargo loco task routes:generate`.
+`cargo loco db down`, `cargo loco task routes:generate` and `cargo loco task types:generate`.
 
 ## Verify
 

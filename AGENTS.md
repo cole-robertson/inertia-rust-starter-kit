@@ -36,18 +36,19 @@ and `docs/RAILS_TO_LOCO.md` (every Rails command and its equivalent here).
 |---|---|
 | `src/app.rs` | `Hooks`: routes, initializers, workers, tasks, seeds |
 | `src/route_table.rs` | **every URL in the app**, the single source for Rust routes and `frontend/routes/*.ts` |
+| `src/page_types.rs` | the props structs whose TypeScript types are generated into `frontend/types/generated/` |
 | `src/inertia/` | our Inertia v3 server adapter (page object, partial reloads, prop kinds, SSR, CSRF, flash/errors cookie, CSP) |
 | `src/controllers/` | handlers; parse, call a model method, render an Inertia page or redirect |
 | `src/models/` | SeaORM models with the domain logic (`users.rs`, `sessions.rs`, `tokens.rs`, `accounts.rs`, `memberships.rs`, `invitations.rs`); `_entities/` is generated |
 | `src/live/`, `src/channels/` | live updates (the kit's Action Cable): the SSE hub, presence, and the app's channels |
 | `src/mailers/`, `src/workers/` | mail (password reset, email verification) delivered on the SQLite queue |
-| `src/tasks/` | `cargo loco task …`, including `routes:generate` and `scaffold:pages` |
+| `src/tasks/` | `cargo loco task …`, including `routes:generate`, `types:generate` and `scaffold:pages` |
 | `.loco-templates/` | the kit's generator templates: `cargo loco generate scaffold` writes Inertia code |
 | `src/fixtures/` | seed data (`cargo loco db seed`); users have password `Secret1*3*5*` |
 | `migration/` | SeaORM migrations |
 | `config/{development,test,production}.yaml` | Loco config; app settings are under `settings:` |
-| `frontend/` | React app: `pages/`, `components/` (shadcn/ui in `components/ui`), `layouts/`, `routes/` (**generated**), `types/` |
-| `tests/` | Rust request/model/protocol tests; `tests/routes_fresh.rs` guards the generated routes |
+| `frontend/` | React app: `pages/`, `components/` (shadcn/ui in `components/ui`), `layouts/`, `routes/` (**generated**), `types/` (`types/generated/` is **generated**) |
+| `tests/` | Rust request/model/protocol tests; `tests/routes_fresh.rs` and `tests/types_fresh.rs` guard the generated routes and prop types |
 | `e2e/` | Playwright system test, run against the release binary via `bin/e2e-server`; mail goes to `e2e/mail-sink.ts` (read it with `e2e/mail.ts`) |
 | `bin/` | `setup`, `dev`, `ci`, `e2e-server`, `secret` (prints a `SECRET_KEY_BASE`), `rename` |
 | `Dockerfile`, `config/deploy.yml`, `.kamal/` | production image and Kamal 2 deploy |
@@ -66,12 +67,17 @@ and `docs/RAILS_TO_LOCO.md` (every Rails command and its equivalent here).
 4. **Routes come from `src/route_table.rs`.** To add or change a URL, edit it there, then run
    `cargo loco task routes:generate` and commit `frontend/routes/`. Never hand-edit
    `frontend/routes/*.ts` (except `runtime.ts`).
-5. **Match the Rails kit.** Flash texts, error messages and redirects must match
+5. **Page props are Rust structs; their TS types are generated.** A record on a page is a
+   `#[derive(Serialize, ts_rs::TS)]` struct listed in `src/page_types.rs`; run
+   `cargo loco task types:generate`, commit `frontend/types/generated/`, and import the type in
+   the page (`import type { ProjectProps } from "@/types/generated/ProjectProps"`). Never
+   redeclare a props type by hand in TypeScript, and never hand-edit the generated files.
+6. **Match the Rails kit.** Flash texts, error messages and redirects must match
    `inertia-rails/react-starter-kit`. Frontend errors are `string[]` per field. The one
    deliberate addition is **accounts** (organizations): data lives under `/{account_slug}/…`,
    handlers take `CurrentAccount`, and every query is scoped to the account (another account's
    id is a 404). See `.claude/skills/starter-kit/recipes/accounts.md`.
-6. **Write transactions use `crate::db::begin_write(db)`** (`BEGIN IMMEDIATE`, as Rails 8 does), never `db.begin()`.
+7. **Write transactions use `crate::db::begin_write(db)`** (`BEGIN IMMEDIATE`, as Rails 8 does), never `db.begin()`.
 
 ## Running things
 
@@ -93,6 +99,7 @@ npm run lint && npm run format && npm run check
 ```
 
 If you touched routes: `cargo loco task routes:generate` and `cargo test --test routes_fresh`.
+If you touched a props struct: `cargo loco task types:generate` and `cargo test --test types_fresh`.
 Or just run `bin/ci`.
 
 **Every new page or prop gets a budget test**: its exact props, deferred/optional ones, a
