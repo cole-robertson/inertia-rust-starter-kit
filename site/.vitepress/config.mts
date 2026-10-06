@@ -25,7 +25,7 @@ export default defineConfig({
   // Dead links fail the build; only http://localhost:5150 and friends (the app you run) are exempt.
   ignoreDeadLinks: "localhostLinks",
   // The generated snippets are included into index.md, not pages of their own.
-  srcExclude: ["snippets/**", "partials/**", "README.md", "og/**"],
+  srcExclude: ["snippets/**", "partials/**", "README.md"],
   sitemap: { hostname: SITE },
   // The docs are written for GitHub and link to its heading anchors (`#flyio`,
   // `#single-binary--systemd`), so the site makes the same ids.
@@ -48,7 +48,10 @@ export default defineConfig({
   transformPageData(pageData) {
     const path = pageData.relativePath.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "")
     const pageTitle = pageData.frontmatter.title || pageData.title
-    const fullTitle = pageTitle && pageTitle !== title ? `${pageTitle} · ${title}` : `${title}: React pages, Rust server, no API`
+    // A page title that already names the site (the home page's) isn't suffixed again.
+    const fullTitle = !pageTitle || pageTitle === title
+      ? `${title}: React pages, Rust server, no API`
+      : pageTitle.startsWith(title) ? pageTitle : `${pageTitle} · ${title}`
     const desc = pageData.frontmatter.description || pageData.description || description
     pageData.frontmatter.editSource = sourceOf[pageData.relativePath] ?? `site/${pageData.relativePath}`
     pageData.frontmatter.head ??= []

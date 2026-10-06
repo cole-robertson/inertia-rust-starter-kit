@@ -17,5 +17,4 @@ npm run build     # sync, build, then check every internal link and #anchor
 ```
 
 The build fails on a dead link or anchor; `.github/workflows/site.yml` runs it on pull requests
-that touch the docs. The Open Graph image is `public/og.png`, rendered from `og/og.svg` with
-`rsvg-convert -w 1200 -h 630 og/og.svg -o public/og.png`.
+that touch the docs. The Open Graph image is `public/og.png` (1200×630).
