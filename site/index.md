@@ -23,42 +23,42 @@ hero:
       link: /guide/
 
 features:
-  - icon: 👥
+  - icon: { src: /features/accounts.svg, width: 48, height: 48 }
     title: Accounts built in
     details: "Organizations, members with roles and email invitations. Routes live under /{account_slug}, and every generated query is scoped to the account."
     link: /guide/accounts
     linkText: Accounts guide
-  - icon: ⚡
+  - icon: { src: /features/live-updates.svg, width: 48, height: 48 }
     title: Live updates
     details: "The kit's Action Cable: channels, broadcast_to, presence and perform over Server-Sent Events. Broadcast after a write; the page reloads its props."
     link: /guide/live-updates
     linkText: Live updates guide
-  - icon: 🏗️
+  - icon: { src: /features/generators.svg, width: 48, height: 48 }
     title: Generators
     details: "cargo loco generate scaffold writes the migration, model, controller, routes, React pages and tests, scoped to the account by default."
     link: /guide/new-resource
     linkText: Scaffold guide
-  - icon: 📝
+  - icon: { src: /features/forms.svg, width: 48, height: 48 }
     title: Forms and Precognition
     details: "Rails-style validation messages as an error bag, Inertia's useForm, and Precognition to validate as you type."
     link: /guide/forms-and-validation
     linkText: Forms guide
-  - icon: 🖥️
+  - icon: { src: /features/ssr.svg, width: 48, height: 48 }
     title: SSR when you want it
     details: "Off by default. Turn it on and the Rust binary starts and supervises the Node renderer, falling back to client rendering on timeout."
     link: /reference/inertia#ssr-ssrrs
     linkText: SSR reference
-  - icon: 📬
+  - icon: { src: /features/jobs-mail.svg, width: 48, height: 48 }
     title: Jobs, mail, scheduler
     details: "A job queue on SQLite (no Redis), mailers, and scheduled tasks, all run by the same binary."
     link: /guide/background-job
     linkText: Background jobs guide
-  - icon: 🤖
+  - icon: { src: /features/agent-skills.svg, width: 48, height: 48 }
     title: Agent skills
     details: "AGENTS.md plus two skills in .claude/skills: Loco with its full API index, and one recipe per task for extending this app."
     link: /guide/agents
     linkText: For coding agents
-  - icon: 📦
+  - icon: { src: /features/deploy.svg, width: 48, height: 48 }
     title: One-binary deploy
     details: "Kamal, Cloudflare Containers, Docker Compose, systemd, Fly.io or Render. One Rust binary serves the app and runs the job queue."
     link: /guide/deploy
