@@ -13,7 +13,7 @@ function githubSlug(text: string) {
 
 const title = "Inertia Rust"
 const description =
-  "Inertia Rails, in Rust: an Inertia.js v3 + React 19 starter kit on Loco. Auth, accounts, live updates, generators and agent skills, served by one Rust binary."
+  "React pages, a Rust server, no API: an Inertia.js v3 + React 19 starter kit on Loco. Auth, accounts, live updates, generators and agent skills, served by one Rust binary."
 
 export default defineConfig({
   lang: "en-US",
@@ -48,7 +48,7 @@ export default defineConfig({
   transformPageData(pageData) {
     const path = pageData.relativePath.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "")
     const pageTitle = pageData.frontmatter.title || pageData.title
-    const fullTitle = pageTitle && pageTitle !== title ? `${pageTitle} · ${title}` : `${title}: Inertia Rails, in Rust`
+    const fullTitle = pageTitle && pageTitle !== title ? `${pageTitle} · ${title}` : `${title}: React pages, a Rust server, no API`
     const desc = pageData.frontmatter.description || pageData.description || description
     pageData.frontmatter.editSource = sourceOf[pageData.relativePath] ?? `site/${pageData.relativePath}`
     pageData.frontmatter.head ??= []
