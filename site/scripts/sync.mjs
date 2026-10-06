@@ -135,7 +135,7 @@ for (const [name, lang] of [["controller.rs", "rust"], ["page.tsx", "tsx"]]) {
 write("snippets/files.json", JSON.stringify(files, null, 2) + "\n")
 write("snippets/quick-start.sh", block("sh", "## Quick start"))
 
-// Icons: the favicon, the README wordmark and the colour mark (docs/logo/, from gen.py).
+// Icons: the favicon, the README wordmark and the colour mark (docs/logo/).
 for (const [from, to] of [
   ["public/icon.svg", "icon.svg"],
   ["public/icon.png", "icon.png"],
