@@ -95,7 +95,7 @@ Coming from Rails? The kit follows the [Inertia Rails React Starter Kit](https:/
 
 ## The numbers
 
-<p class="lede">Both kits as production Docker images on the same workstation, 4 pinned CPUs each, SQLite, SSR off, Rails with YJIT and Puma 4×3. Medians of 5 runs, 2026-10-04.</p>
+<p class="lede">Both kits as production Docker images on the same workstation, 4 pinned CPUs each, SQLite, SSR off, Rails with YJIT and Puma 4×3. Medians of 5 runs, 2026-10-04. <a href="/reference/benchmark">The full benchmark</a>.</p>
 
 <div class="stats">
 <div class="stat"><div class="value">57 ms</div><div class="label">boot to first response, vs 1.6 s for the Rails kit</div></div>
@@ -105,7 +105,6 @@ Coming from Rails? The kit follows the [Inertia Rails React Starter Kit](https:/
 <div class="stat"><div class="value">52 MB</div><div class="label">compressed Docker image, vs 207 MB</div></div>
 </div>
 
-The caveats are real. Under a 4 GB container limit, 0.17% of SQLite writes from 32 writers failed with a 500 (pool timeouts during write stalls; none with 32 GB), where Rails had none. With SSR on, Node is the bottleneck and throughput is about equal. The Rails kit builds its image faster from cold and reloads code instantly. Method, ranges and every caveat: [the full benchmark](/reference/benchmark).
 
 </div>
 
