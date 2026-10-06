@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0 - 2026-10-06
+
+- **Typed page props.** A page's props are a Rust struct deriving `Serialize` and `ts_rs::TS`,
+  listed in `src/page_types.rs`. `cargo loco task types:generate` writes the matching
+  TypeScript to `frontend/types/generated/`, and pages import those types instead of declaring
+  their own. `tests/types_fresh.rs` (and a `bin/ci` step) fails when the generated types are
+  stale, so renaming a field in Rust breaks the TypeScript build. `controllers::render` takes
+  any `Serialize` value, and `Prop::serialize` keeps deferred, lazy and once props typed.
+- **Scaffolds generate typed props:** `cargo loco generate scaffold` writes a
+  `<Singular>Props` struct from the entity's field types (`Option<T>` becomes `T | null`), the
+  controller returns it, and `scaffold:pages` regenerates the types the pages import. The
+  kit's own shared props, account, member, invitation and session props are typed too.
+- **Docs site at [inertia-rust.dev](https://inertia-rust.dev),** built from the repo's own
+  markdown with VitePress (`site/`): a landing page, the guides and recipes, the reference,
+  search, and `llms.txt` / `llms-full.txt`. Apps made from the template can delete `site/`.
+  The live demo moved to [demo.inertia-rust.dev](https://demo.inertia-rust.dev).
+- **New mark:** two violet chevrons in front of an orange gear, in colour in the app, the
+  favicon and the README wordmark. The sidebar and account-switcher tile is a bordered
+  `bg-background` square so the colours read in light and dark.
+- The sidebar and header **Documentation** links open the kit's guide.
+
 ## 0.1.1 - 2026-10-06
 
 Fixes from walking through the kit as a first-time user, start to finish.
