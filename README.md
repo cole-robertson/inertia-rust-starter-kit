@@ -9,6 +9,9 @@ Clone it, rename it, and build a multi-tenant web app. The pages are React and s
 server is one Rust binary with SQLite, a job queue and mail. There's no separate API: Inertia
 renders the pages from the server.
 
+**Try it:** [demo.inertia-rust.dev](https://demo.inertia-rust.dev) runs this kit as it ships.
+Sign up there (the database resets now and then). Docs: [inertia-rust.dev](https://inertia-rust.dev).
+
 **Accounts are built in.** Like most business software, data belongs to an account
 (organization), not to a single user: everyone who signs up gets one (an invitation joins the
 inviter's account instead), can create more, and invites others with roles. Routes live under `/{account_slug}/…`, every generated query is scoped to the
