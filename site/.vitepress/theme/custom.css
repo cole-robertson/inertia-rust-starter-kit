@@ -336,3 +336,10 @@ html .vp-doc .code-card .shiki span {
     background: var(--code-card-bg);
   }
 }
+
+/* The one line under the home page's code cards. */
+.home-code .code-note {
+  margin-top: 16px;
+  text-align: center;
+  color: var(--vp-c-text-2);
+}
