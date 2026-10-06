@@ -127,3 +127,30 @@ html.dark .light-only {
   font-size: 0.95rem;
   color: var(--vp-c-text-2);
 }
+
+/* The code example between the hero and the feature cards: same width and gutters as the
+   cards (VPFeatures: max-width 1152px, padding 24/48/64px), so their edges line up. */
+.home-code {
+  padding: 0 24px;
+  margin-bottom: 48px;
+}
+@media (min-width: 640px) {
+  .home-code {
+    padding: 0 48px;
+  }
+}
+@media (min-width: 960px) {
+  .home-code {
+    padding: 0 64px;
+  }
+}
+.home-code > .vp-doc {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 0;
+}
+.home-code h2:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}

@@ -1,12 +1,12 @@
 ---
 layout: home
-title: "Inertia Rust: React pages, a Rust server, no API"
+title: "Inertia Rust: React pages, Rust server, no API"
 titleTemplate: false
 description: "An Inertia.js v3 + React 19 starter kit on a Rust server (Loco): auth, accounts, live updates and generators built in. One binary, SQLite, no API layer."
 
 hero:
   name: Inertia Rust
-  text: React pages. A Rust server. No API.
+  text: React pages. Rust server. No API.
   tagline: "An Inertia.js starter kit for Rust: React 19 and shadcn/ui pages, served by a Loco server with auth, accounts, live updates and generators built in. One binary, SQLite, and nothing to keep in sync between them."
   image:
     src: /mark.svg
@@ -64,24 +64,6 @@ features:
     link: /guide/deploy
     linkText: Deploy guide
 ---
-
-<div class="home-section">
-
-## A controller and the page it renders
-
-<p class="lede">The controller loads the data and hands it to a React page as props. There's no JSON API in between, and nothing to keep in sync.</p>
-
-::: code-group
-
-<<< @/snippets/controller.rs [Rust controller]
-
-<<< @/snippets/page.tsx [React page]
-
-:::
-
-`cargo loco generate scaffold projects name:string!` writes both, plus the model, migration, routes and tests.
-
-</div>
 
 <div class="home-section">
 
