@@ -8,10 +8,11 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import AppLayout from "@/layouts/app-layout"
 import { accounts } from "@/routes"
-import type { Account, BreadcrumbItem } from "@/types"
+import type { BreadcrumbItem } from "@/types"
+import type { AccountProps } from "@/types/generated/AccountProps"
 
 interface AccountSettingsProps {
-  account: Account
+  account: AccountProps
 }
 
 export default function AccountSettings({ account }: AccountSettingsProps) {

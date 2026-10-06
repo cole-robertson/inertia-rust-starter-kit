@@ -11,13 +11,12 @@ import { useCurrentAccount } from "@/hooks/use-current-account"
 import AppLayout from "@/layouts/app-layout"
 import { {{ camel_plural }} as routes } from "@/routes"
 import type { BreadcrumbItem } from "@/types"
-
-import type { {{ pascal_singular }} } from "./form"
+import type { {{ pascal_singular }}Props } from "@/types/generated/{{ pascal_singular }}Props"
 
 export default function {{ pascal_singular }}Show({
   {{ snake_singular }},
 }: {
-  {{ snake_singular }}: {{ pascal_singular }}
+  {{ snake_singular }}: {{ pascal_singular }}Props
 }) {
 {%- if scoped %}
   const { slug: accountSlug } = useCurrentAccount()

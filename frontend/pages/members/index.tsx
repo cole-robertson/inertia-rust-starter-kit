@@ -18,26 +18,14 @@ import { useCurrentAccount } from "@/hooks/use-current-account"
 import AppLayout from "@/layouts/app-layout"
 import { useLiveReload, usePresence } from "@/lib/live"
 import { accounts, accountsInvitations, members } from "@/routes"
-import type { BreadcrumbItem, Role } from "@/types"
-
-interface Member {
-  id: number
-  user: { name: string; email: string }
-  role: Role
-  joined_at: string
-}
-
-interface PendingInvitation {
-  id: number
-  email: string
-  role: Exclude<Role, "owner">
-  expires_at: string
-  inviter_name: string
-}
+import type { BreadcrumbItem } from "@/types"
+import type { MemberProps } from "@/types/generated/MemberProps"
+import type { PendingInvitationProps } from "@/types/generated/PendingInvitationProps"
+import type { Role } from "@/types/generated/Role"
 
 interface MembersProps {
-  members: Member[]
-  invitations: PendingInvitation[]
+  members: MemberProps[]
+  invitations: PendingInvitationProps[]
   can_manage: boolean
 }
 

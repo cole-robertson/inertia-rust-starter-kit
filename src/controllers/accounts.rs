@@ -9,7 +9,7 @@ use serde_json::json;
 use crate::{
     auth::{Authenticated, CurrentAccount},
     controllers::{precognitive, render, Params},
-    inertia::{defer, redirect::Redirect, render::Inertia, Props},
+    inertia::{defer, redirect::Redirect, render::Inertia, Prop, Props},
     models::{
         accounts::{self, AccountParams},
         memberships,
@@ -53,7 +53,7 @@ async fn show(
         .render(
             "accounts/show",
             Props::new()
-                .prop("account", current.account.to_props())
+                .prop("account", Prop::serialize(&current.account.to_props())?)
                 .prop("membership", json!({ "role": current.membership.role }))
                 .prop(
                     "members_count",

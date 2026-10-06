@@ -675,12 +675,9 @@ fn generated_code_builds_and_passes_its_tests() {
             &target_dir,
         );
     }
-    run(
-        &root,
-        cargo,
-        &["test", "--test", "routes_fresh"],
-        &target_dir,
-    );
+    for fresh in ["routes_fresh", "types_fresh"] {
+        run(&root, cargo, &["test", "--test", fresh], &target_dir);
+    }
     run(
         &root,
         "npx",
@@ -717,9 +714,20 @@ fn generated_code_builds_and_passes_its_tests() {
         }
     }
 
-    // The scoped scaffold's skipped column stayed out of the pages; the nested controller's
-    // handlers look the widget up in the account.
-    assert!(!read(&root, "frontend/pages/widgets/form.tsx").contains("archived_at"));
+    // The scoped scaffold's skipped column stayed out of the pages, which type their props
+    // with the generated `WidgetProps` (`tsc` above checked them against it); the nested
+    // controller's handlers look the widget up in the account.
+    let form = read(&root, "frontend/pages/widgets/form.tsx");
+    assert!(!form.contains("archived_at"));
+    assert!(
+        form.contains("from \"@/types/generated/WidgetProps\""),
+        "{form}"
+    );
+    let widget_props = read(&root, "frontend/types/generated/WidgetProps.ts");
+    assert!(
+        widget_props.contains("name: string, notes: string | null, }"),
+        "{widget_props}"
+    );
     assert!(read(&root, "src/controllers/widgets/approvals.rs")
         .contains("widgets::Model::find_in_account(&ctx.db, current.account.id, widget_id)"));
 

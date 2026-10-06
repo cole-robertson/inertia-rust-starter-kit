@@ -83,7 +83,7 @@ jobs:
 
       # Runs the real generators in a copy of the app (an account-scoped and a --global
       # scaffold; page, write and nested controllers), then clippy, their request tests,
-      # routes_fresh, tsc and eslint there (tests/controller_generator.rs).
+      # routes_fresh, types_fresh, tsc and eslint there (tests/controller_generator.rs).
       - name: Generated code builds and passes its tests
         run: cargo test --locked --test controller_generator -- --ignored
 
@@ -106,6 +106,13 @@ jobs:
           cargo test --locked --test routes_fresh
           git diff --exit-code -- frontend/routes
           test -z "$(git ls-files --others --exclude-standard -- frontend/routes)"
+
+      # The page props' TypeScript types, from the Rust structs (src/page_types.rs).
+      - name: Regenerate and compare frontend/types/generated
+        run: |
+          cargo test --locked --test types_fresh
+          git diff --exit-code -- frontend/types/generated
+          test -z "$(git ls-files --others --exclude-standard -- frontend/types/generated)"
 
   js:
     name: JavaScript (lint, format, types, build)

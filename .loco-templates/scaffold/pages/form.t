@@ -25,23 +25,12 @@ import {
 } from "@/components/ui/select"
 {%- endif %}
 import { Spinner } from "@/components/ui/spinner"
-
-export interface {{ pascal_singular }} {
-  id: number
-{%- for f in fields %}
-  {{ f.name }}: {{ f.ts_type }}
-{%- endfor %}
-}
+import type { {{ pascal_singular }}Props } from "@/types/generated/{{ pascal_singular }}Props"
+{%- if selects | length > 0 %}
+import type { SelectOption } from "@/types/generated/SelectOption"
+{%- endif %}
 {%- set_global nullable_selects = [] %}
 {%- for f in selects %}{% if f.nullable %}{% set_global nullable_selects = nullable_selects | concat(with=f.name) %}{% endif %}{% endfor %}
-{%- if selects | length > 0 %}
-
-// A parent record to pick in a select: the `<association>_options` props the controller sends.
-export interface SelectOption {
-  id: number
-  label: string
-}
-{%- endif %}
 {%- if nullable_selects | length > 0 %}
 
 // A select item can't have the value "", so "None" submits NONE and `transform` blanks it.
@@ -59,7 +48,7 @@ export default function {{ pascal_singular }}Form({
   submitLabel,
 }: {
   action: UrlMethodPair
-  {{ camel_singular }}?: {{ pascal_singular }}
+  {{ camel_singular }}?: {{ pascal_singular }}Props
 {%- for f in selects %}
   {{ f.options_camel }}: SelectOption[]
 {%- endfor %}

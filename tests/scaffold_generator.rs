@@ -311,6 +311,22 @@ fn scaffold_templates_generate_a_wired_account_scoped_resource() {
     );
     assert!(model.contains(".first(db)"), "finders use db::First");
     assert_eq!(model.matches("use loco_rs::model::").count(), 1);
+    // The props struct: the entity's own types, so nullable columns are `Option`s (`T | null`
+    // in TypeScript), a date is a `Date` (a string) and a bool a bool.
+    assert!(model.contains("pub fn to_props(&self) -> WidgetProps {"));
+    assert!(
+        compact(&model).contains(&compact(
+            "#[derive(Debug, Clone, PartialEq, Serialize, TS)] pub struct WidgetProps { \
+         pub id: i64, pub name: String, pub body: Option<String>, pub published: bool, \
+         pub views: i64, pub rating: Option<f64>, pub published_on: Option<Date>, }"
+        )),
+        "{model}"
+    );
+    assert!(model.contains("body: self.body.clone(),"), "{model}");
+    assert!(model.contains("rating: self.rating,"), "{model}");
+    assert!(read(&root, "src/page_types.rs").contains(
+        "    types.add::<crate::models::widgets::WidgetProps>();\n    // scaffold:types"
+    ));
 
     let test = read(&root, "tests/requests/widgets.rs");
     assert!(
@@ -337,8 +353,20 @@ fn scaffold_templates_generate_a_wired_account_scoped_resource() {
         ["archived_at (DateTimeWithTimeZone: no form input)"]
     );
     let form = read(&root, "frontend/pages/widgets/form.tsx");
-    assert!(form.contains("export interface Widget {"));
-    assert!(form.contains("rating: number | null"));
+    assert!(form.contains("import type { WidgetProps } from \"@/types/generated/WidgetProps\""));
+    assert!(form.contains("widget?: WidgetProps"), "{form}");
+    assert!(
+        !form.contains("interface"),
+        "no hand-written prop types:\n{form}"
+    );
+    for page in ["index", "show", "edit"] {
+        let src = read(&root, &format!("frontend/pages/widgets/{page}.tsx"));
+        assert!(
+            src.contains("from \"@/types/generated/WidgetProps\"")
+                && !src.contains("import type { Widget }"),
+            "{page} imports the generated type:\n{src}"
+        );
+    }
     assert!(
         !form.contains("account_id") && !form.contains("archived_at"),
         "{form}"
@@ -426,6 +454,7 @@ fn scaffold_templates_generate_a_wired_account_scoped_resource() {
         "\"widget_options\": gadgets::Model::widget_options(&ctx.db, account_id).await?,"
     ));
     assert!(gadgets_controller.contains("form_options(&ctx, current.account.id).await?"));
+    assert!(gadgets.contains("-> ModelResult<Vec<super::SelectOption>>"));
     let gadgets_test = read(&root, "tests/requests/gadgets.rs");
     assert!(gadgets_test
         .contains("async fn create_parents(ctx: &AppContext, account_id: i64, ids: &[i64])"));
@@ -462,11 +491,13 @@ fn scaffold_templates_generate_a_wired_account_scoped_resource() {
         !form.contains("owner") && !form.contains("creator"),
         "{form}"
     );
+    assert!(form.contains("from \"@/types/generated/SelectOption\""));
     let new_page = read(&root, "frontend/pages/gadgets/new.tsx");
     assert!(
         new_page.contains("widget_options: SelectOption[]"),
         "{new_page}"
     );
+    assert!(new_page.contains("from \"@/types/generated/SelectOption\""));
     assert!(new_page.contains("widgetOptions={widget_options}"));
 
     // --- gizmos: `--global` is the plain signed-in resource ---------------------------------

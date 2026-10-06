@@ -12,10 +12,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import AppLayout from "@/layouts/app-layout"
 import { accounts } from "@/routes"
-import type { Account, BreadcrumbItem, Role } from "@/types"
+import type { BreadcrumbItem } from "@/types"
+import type { AccountProps } from "@/types/generated/AccountProps"
+import type { Role } from "@/types/generated/Role"
 
 interface ShowAccountProps {
-  account: Account
+  account: AccountProps
   membership: { role: Role }
   members_count?: number
 }

@@ -10,10 +10,9 @@ import { useCurrentAccount } from "@/hooks/use-current-account"
 import AppLayout from "@/layouts/app-layout"
 import { {{ camel_plural }} as routes } from "@/routes"
 import type { BreadcrumbItem } from "@/types"
-
 {% if selects | length > 0 -%}
-import type { SelectOption } from "./form"
-{% endif -%}
+import type { SelectOption } from "@/types/generated/SelectOption"
+{% endif %}
 import {{ pascal_singular }}Form from "./form"
 
 {% if not scoped -%}

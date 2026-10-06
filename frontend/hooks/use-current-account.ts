@@ -1,6 +1,6 @@
 import { usePage } from "@inertiajs/react"
 
-import type { AccountSummary } from "@/types"
+import type { AccountSummary } from "@/types/generated/AccountSummary"
 
 // The account in the URL (/:account_slug/...). The name comes from the switcher list,
 // falling back to the slug if the list doesn't have it (yet).

@@ -11,8 +11,7 @@ import { useCurrentAccount } from "@/hooks/use-current-account"
 import AppLayout from "@/layouts/app-layout"
 import { {{ camel_plural }} as routes } from "@/routes"
 import type { BreadcrumbItem } from "@/types"
-
-import type { {{ pascal_singular }} } from "./form"
+import type { {{ pascal_singular }}Props } from "@/types/generated/{{ pascal_singular }}Props"
 {% if not scoped %}
 const breadcrumbs: BreadcrumbItem[] = [
   { title: "{{ label_plural }}", href: routes.index().url },
@@ -21,7 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function {{ pascal_singular }}Index({
   {{ snake_plural }},
 }: {
-  {{ snake_plural }}: {{ pascal_singular }}[]
+  {{ snake_plural }}: {{ pascal_singular }}Props[]
 }) {
 {%- if scoped %}
   const { slug: accountSlug } = useCurrentAccount()
