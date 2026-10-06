@@ -199,10 +199,17 @@ impl<S: Send + Sync> FromRequestParts<S> for Details {
 /// The flash a forbidden action redirects back with.
 pub const PERMISSION_DENIED: &str = "You don't have permission to do that";
 
+/// The alert an Inertia visit to an account the user can't open gets (missing, or not a
+/// member: the same words either way).
+pub const ACCOUNT_UNAVAILABLE: &str = "That account isn't available";
+
 /// Signed in and a member of the account named by the `{account_slug}` path segment
 /// (the Rails app's `AccountScoped` concern). A non-member gets the same 404 as a missing
-/// account, so the response never tells whether the account exists. Each visit remembers the
-/// account as the user's last one (`users.last_account_id`).
+/// account, so the response never tells whether the account exists. An Inertia visit (a page
+/// already open, e.g. after the user was removed from the account) is redirected to the user's
+/// home with the same neutral alert instead, so Inertia doesn't show the raw 404 page in its
+/// error overlay. Each visit remembers the account as the user's last one
+/// (`users.last_account_id`).
 #[derive(Debug, Clone)]
 pub struct CurrentAccount {
     pub session: CurrentSession,
@@ -253,7 +260,19 @@ impl FromRequestParts<AppContext> for CurrentAccount {
             .await
             .map_err(|err| loco_rs::Error::from(err).into_response())?;
         let Some((membership, Some(account))) = found else {
-            return Err(not_found());
+            if !crate::inertia::redirect::is_inertia(&parts.headers) {
+                return Err(not_found());
+            }
+            let home = crate::controllers::members::home_path(
+                ctx,
+                session.user.id,
+                session.user.last_account_id,
+            )
+            .await
+            .map_err(IntoResponse::into_response)?;
+            return Err(Redirect::to(home)
+                .alert(ACCOUNT_UNAVAILABLE)
+                .into_response());
         };
         session
             .user
