@@ -1,13 +1,13 @@
 ---
 layout: home
-title: "Inertia Rust: Inertia Rails, in Rust"
+title: "Inertia Rust: React pages, a Rust server, no API"
 titleTemplate: false
-description: "The Inertia Rails starter kit, ported to Rust. React 19 pages, a Loco server with auth, accounts, live updates and generators, one binary and SQLite. No API layer."
+description: "An Inertia.js v3 + React 19 starter kit on a Rust server (Loco): auth, accounts, live updates and generators built in. One binary, SQLite, no API layer."
 
 hero:
   name: Inertia Rust
-  text: Inertia Rails, in Rust.
-  tagline: "The Inertia Rails starter kit, ported to Loco. React 19 and shadcn/ui pages, rendered by a Rust server that has auth, accounts, live updates and generators built in. One binary, SQLite, no API layer."
+  text: React pages. A Rust server. No API.
+  tagline: "An Inertia.js starter kit for Rust: React 19 and shadcn/ui pages, served by a Loco server with auth, accounts, live updates and generators built in. One binary, SQLite, and nothing to keep in sync between them."
   image:
     src: /mark.svg
     alt: Inertia Rust
@@ -98,11 +98,11 @@ features:
 </div>
 <div>
 <strong>Mutations redirect</strong>
-<p>Forms post, the controller validates and redirects with a flash or an error bag. The same loop as Rails, with the same messages.</p>
+<p>Forms post, the controller validates and redirects with a flash or an error bag. Errors show up on the right fields, no client-side state to manage.</p>
 </div>
 </div>
 
-If you know [Inertia Rails](https://inertia-rails.dev), you already know how this app works: the routes, pages and flash messages match the [Inertia Rails React Starter Kit](https://github.com/inertia-rails/react-starter-kit) it was ported from. [Rails → Loco](/reference/rails-to-loco) maps every `rails` command to its equivalent here.
+Coming from Rails? The kit follows the [Inertia Rails React Starter Kit](https://github.com/inertia-rails/react-starter-kit), and [Rails → Loco](/reference/rails-to-loco) maps each `rails` command to its equivalent here.
 
 <img class="screenshot light-only" src="/repo/docs/screenshots/home-desktop-light.png" alt="The kit's home page, light theme" width="1280" height="800">
 <img class="screenshot dark-only" src="/repo/docs/screenshots/home-desktop-dark.png" alt="The kit's home page, dark theme" width="1280" height="800">
@@ -147,9 +147,9 @@ Open http://localhost:5150 and sign in as `one@example.com` / `Secret1*3*5*`. Th
 
 For one small binary that boots in milliseconds, uses a fraction of the memory and serves more requests per core, with the compiler checking the server code and typed routes shared with React. [Loco](https://loco.rs) brings Rails' shape to Rust: generators, migrations, jobs, mailers, tasks. The trade is slower builds and no autoloading; see [the benchmark](/reference/benchmark) for both sides.
 
-### How close is it to the Rails kit?
+### Where does it come from?
 
-It's a port of the [Inertia Rails React Starter Kit](https://github.com/inertia-rails/react-starter-kit): the same routes, pages, texts and flash messages, checked by a parity oracle that compares both kits' responses. Organizations are added on top. Every intended difference is listed in [Parity with the Rails kit](/reference/parity).
+It started as a port of the [Inertia Rails React Starter Kit](https://github.com/inertia-rails/react-starter-kit), and it still matches its routes, pages and messages, checked by a test that compares both kits' responses. Organizations are added on top. Every intended difference is listed in [Parity with the Rails kit](/reference/parity).
 
 ### Can I use Postgres?
 
