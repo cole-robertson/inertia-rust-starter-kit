@@ -5,10 +5,9 @@ import { type SVGAttributes, useId } from "react"
 // read on light and dark, so put it on the page background (or a bordered `bg-background` tile),
 // not on a coloured fill. Size it with className (`size-6`); the viewBox is a little wider than
 // tall, and the default preserveAspectRatio centres it in a square box without squashing it.
-// The paths are docs/logo/mark.svg, written by docs/logo/gen.py (`--mono` for a one-colour
-// version). Gradient ids come from useId(), since the mark renders several times on a page.
-// Replace it with your own logo. public/icon.svg and public/icon.png are the favicon and app
-// icon (`gen.py --icon`).
+// The paths match docs/logo/mark.svg. Gradient ids come from useId(), since the mark renders
+// several times on a page. Replace it with your own logo. public/icon.svg and public/icon.png
+// are the favicon and app icon.
 export default function AppLogoIcon(props: SVGAttributes<SVGElement>) {
   const id = useId()
   const gear = `${id}-gear`
