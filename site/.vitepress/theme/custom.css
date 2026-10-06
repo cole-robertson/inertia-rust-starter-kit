@@ -154,3 +154,165 @@ html.dark .light-only {
   margin-top: 0;
   padding-top: 0;
 }
+
+/* The two code cards (CodeCard.vue), styled after inertia-rails.dev: dark in both themes, a
+   filename tab with the framework's icon, and the copy button in the header. Side by side in
+   one frame from 1024px (where inertia-rails.dev switches); below that, two cards with the
+   second stacked onto the first. Shiki's github-dark colours are used in both themes. */
+.code-cards {
+  --code-card-bg: #121215;
+  --code-card-line: rgba(255, 255, 255, 0.08);
+  margin: 24px 0 16px;
+}
+.code-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--code-card-bg);
+  border: 1px solid var(--code-card-line);
+  border-radius: 12px;
+  color: #e1e4e8;
+}
+.code-card + .code-card {
+  margin-top: -12px;
+  z-index: 1;
+  box-shadow:
+    0 -4px 16px -2px rgba(0, 0, 0, 0.4),
+    0 -2px 6px -1px rgba(0, 0, 0, 0.2);
+}
+.code-card:not(:last-child) {
+  padding-bottom: 12px;
+}
+.code-card-header {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 6px 48px 6px 8px;
+  border-bottom: 1px solid var(--code-card-line);
+}
+.code-card-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--code-card-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  line-height: 1;
+  color: #a1a1aa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.code-card-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.code-card-icon.rust {
+  color: #f0845c;
+}
+.code-card-icon.react {
+  color: #61dafb;
+}
+
+/* The highlighted block VitePress renders into the card: no box of its own. */
+.vp-doc .code-card div[class*="language-"] {
+  position: static;
+  flex: 1;
+  margin: 0;
+  border-radius: 0 0 12px 12px;
+  background: transparent;
+}
+.vp-doc .code-card div[class*="language-"] pre {
+  padding: 12px 0;
+}
+.vp-doc .code-card div[class*="language-"] code {
+  padding: 0 12px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.vp-doc .code-card div[class*="language-"] > span.lang {
+  display: none;
+}
+html .vp-doc .code-card .shiki span {
+  color: var(--shiki-dark, inherit);
+}
+/* The copy button: always shown (faintly), at the right of the header. */
+.vp-doc .code-card div[class*="language-"] > button.copy {
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E");
+  background-size: 13px;
+  opacity: 0.5;
+}
+.vp-doc .code-card div[class*="language-"] > button.copy:hover,
+.vp-doc .code-card div[class*="language-"] > button.copy:focus-visible,
+.vp-doc .code-card div[class*="language-"] > button.copy.copied {
+  opacity: 1;
+}
+.vp-doc .code-card div[class*="language-"] > button.copy.copied {
+  width: 24px;
+  border-radius: 4px;
+  background-color: transparent;
+  background-image: var(--vp-icon-copied);
+}
+.vp-doc .code-card div[class*="language-"] > button.copy.copied::before {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .vp-doc .code-card div[class*="language-"] pre {
+    padding: 16px 0;
+  }
+  .vp-doc .code-card div[class*="language-"] code {
+    padding: 0 20px;
+    font-size: 13px;
+  }
+}
+@media (min-width: 1024px) {
+  .code-cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    background: var(--code-card-bg);
+    border: 1px solid var(--code-card-line);
+    border-radius: 12px;
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.2),
+      0 1px 4px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+  }
+  .code-card,
+  .code-card + .code-card {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .code-card:not(:last-child) {
+    padding-bottom: 0;
+  }
+  .code-card + .code-card {
+    border-left: 1px solid var(--code-card-line);
+  }
+  .code-card-header {
+    padding: 8px 48px 0 12px;
+  }
+  /* The tab sits on the header's bottom rule and covers it, so it opens into its code. */
+  .code-card-tab {
+    align-self: flex-end;
+    margin-bottom: -1px;
+    height: 33px;
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
+    background: var(--code-card-bg);
+  }
+}
