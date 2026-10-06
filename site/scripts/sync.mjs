@@ -6,7 +6,7 @@
 //   (and must exist, or this fails), and images are served from /repo/<path>.
 // - README's controller/page example (and their file paths) and quick start -> site/snippets/
 //   for the home page.
-// - The favicon and wordmark -> site/public/; the mark (the wordmark's gear) -> public/mark.svg.
+// - The favicon, the wordmark and the mark (docs/logo/mark.svg) -> site/public/.
 // - /llms.txt (an index) and /llms-full.txt (every page, links made absolute).
 import fs from "node:fs"
 import path from "node:path"
@@ -135,18 +135,14 @@ for (const [name, lang] of [["controller.rs", "rust"], ["page.tsx", "tsx"]]) {
 write("snippets/files.json", JSON.stringify(files, null, 2) + "\n")
 write("snippets/quick-start.sh", block("sh", "## Quick start"))
 
-// Icons. The mark is the wordmark's first group (the gear and chevron), on its own canvas.
-fs.copyFileSync(path.join(root, "public/icon.svg"), path.join(site, "public/icon.svg"))
-fs.copyFileSync(path.join(root, "public/icon.png"), path.join(site, "public/icon.png"))
-const wordmark = fs.readFileSync(path.join(root, "docs/logo/wordmark.svg"), "utf8")
-fs.writeFileSync(path.join(site, "public/wordmark.svg"), wordmark)
-const mark = wordmark.match(/<g transform="[^"]*">[\s\S]*?<\/g>/)
-if (!mark) problems.push("docs/logo/wordmark.svg: no <g> holding the mark")
-else
-  fs.writeFileSync(
-    path.join(site, "public/mark.svg"),
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 24" width="320" height="240">\n${mark[0]}\n</svg>\n`,
-  )
+// Icons: the favicon, the README wordmark and the colour mark (docs/logo/, from gen.py).
+for (const [from, to] of [
+  ["public/icon.svg", "icon.svg"],
+  ["public/icon.png", "icon.png"],
+  ["docs/logo/wordmark.svg", "wordmark.svg"],
+  ["docs/logo/mark.svg", "mark.svg"],
+])
+  fs.copyFileSync(path.join(root, from), path.join(site, "public", to))
 copyAsset("docs/screenshots/home-desktop-light.png")
 copyAsset("docs/screenshots/home-desktop-dark.png")
 
