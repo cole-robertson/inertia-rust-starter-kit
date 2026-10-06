@@ -23,7 +23,7 @@ const footerNavItems: NavItem[] = [
   },
   {
     title: "Documentation",
-    href: "https://loco.rs/docs/",
+    href: "https://inertia-rust.dev/guide/",
     icon: BookOpen,
   },
 ]

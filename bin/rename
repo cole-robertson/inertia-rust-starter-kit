@@ -227,5 +227,5 @@ if [ "$dry_run" = false ]; then
     fi
   fi
   echo "Next: cargo build && cargo test, then commit. Domains are yours to set: config/deploy.yml, and for Cloudflare deploy/cloudflare/.env.local (from .env.example)."
-  echo "Yours to edit too: SECURITY.md's advisory link (github.com/your-user/${new_kebab}), and the kit's GitHub link in frontend/components/app-header.tsx and app-sidebar.tsx."
+  echo "Yours to edit too: SECURITY.md's advisory link (github.com/your-user/${new_kebab}), and the kit's Repository and Documentation links in frontend/components/app-header.tsx and app-sidebar.tsx."
 fi
