@@ -6,9 +6,9 @@ use loco_rs::model::{ModelError, ModelResult};
 use rand::Rng;
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder, TransactionSession, TransactionTrait};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use ts_rs::TS;
 
 pub use super::_entities::invitations::{ActiveModel, Column, Entity, Model};
 use super::{
@@ -158,7 +158,7 @@ impl Model {
         db: &C,
         account_id: i64,
         now: DateTime<Utc>,
-    ) -> ModelResult<Vec<serde_json::Value>> {
+    ) -> ModelResult<Vec<PendingInvitationProps>> {
         Ok(Entity::find()
             .filter(Column::AccountId.eq(account_id))
             .filter(Column::AcceptedAt.is_null())
@@ -169,14 +169,12 @@ impl Model {
             .all(db)
             .await?
             .into_iter()
-            .map(|(invitation, inviter)| {
-                json!({
-                    "id": invitation.id,
-                    "email": invitation.email,
-                    "role": invitation.role,
-                    "expires_at": super::as_json_time(&invitation.expires_at),
-                    "inviter_name": inviter.map(|u| u.name),
-                })
+            .map(|(invitation, inviter)| PendingInvitationProps {
+                id: invitation.id,
+                role: invitation.role(),
+                expires_at: super::as_json_time(&invitation.expires_at),
+                email: invitation.email,
+                inviter_name: inviter.map(|u| u.name),
             })
             .collect())
     }
@@ -358,4 +356,16 @@ impl Model {
         self.delete(db).await?;
         Ok(())
     }
+}
+
+/// A pending invitation on the members page (managers only).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct PendingInvitationProps {
+    pub id: i64,
+    pub email: String,
+    pub role: Role,
+    // ISO 8601, UTC.
+    pub expires_at: String,
+    // `None` (null) when the inviter's user is gone.
+    pub inviter_name: Option<String>,
 }

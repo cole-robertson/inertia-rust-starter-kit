@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use loco_rs::{app::AppContext, Error, Result};
-use serde::{de::DeserializeOwned, Deserialize, Deserializer};
+use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 use crate::{
@@ -173,12 +173,17 @@ pub fn with_invitation(path: &str, token: &str) -> String {
     format!("{path}?{query}")
 }
 
-/// Render an Inertia page whose props are a plain JSON object (every page in this kit).
+/// Render an Inertia page whose props are plain values: a `json!({..})` object, or a
+/// `Serialize` struct (each field a prop). For lazy, deferred or once props build
+/// [`Props`] and call `inertia.render` instead.
 ///
 /// # Errors
-/// Rendering failures (SSR is non-fatal; see `inertia::render`).
-pub async fn render(inertia: Inertia, component: &str, props: Value) -> Result<Response> {
-    inertia.render(component, Props::from_json(props)).await
+/// When the props don't serialize to JSON, and rendering failures (SSR is non-fatal; see
+/// `inertia::render`).
+pub async fn render(inertia: Inertia, component: &str, props: impl Serialize) -> Result<Response> {
+    inertia
+        .render(component, Props::from_json(serde_json::to_value(props)?))
+        .await
 }
 
 /// Sign this browser in to the freshly created `session`: set the permanent signed

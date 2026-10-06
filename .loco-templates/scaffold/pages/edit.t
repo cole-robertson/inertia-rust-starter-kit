@@ -10,9 +10,10 @@ import { useCurrentAccount } from "@/hooks/use-current-account"
 import AppLayout from "@/layouts/app-layout"
 import { {{ camel_plural }} as routes } from "@/routes"
 import type { BreadcrumbItem } from "@/types"
-
-{% if selects | length > 0 %}{% set types = [pascal_singular, "SelectOption"] | sort | join(sep=", ") %}{% else %}{% set types = pascal_singular %}{% endif -%}
-import type { {{ types }} } from "./form"
+import type { {{ pascal_singular }}Props } from "@/types/generated/{{ pascal_singular }}Props"
+{% if selects | length > 0 -%}
+import type { SelectOption } from "@/types/generated/SelectOption"
+{% endif %}
 import {{ pascal_singular }}Form from "./form"
 
 export default function {{ pascal_singular }}Edit({
@@ -21,7 +22,7 @@ export default function {{ pascal_singular }}Edit({
   {{ f.options_prop }},
 {%- endfor %}
 }: {
-  {{ snake_singular }}: {{ pascal_singular }}
+  {{ snake_singular }}: {{ pascal_singular }}Props
 {%- for f in selects %}
   {{ f.options_prop }}: SelectOption[]
 {%- endfor %}

@@ -1,8 +1,17 @@
 import type { LucideIcon } from "lucide-react"
 
-export interface Auth {
+import type { AccountSummary } from "./generated/AccountSummary"
+import type { AuthSession } from "./generated/AuthSession"
+import type { AuthUser } from "./generated/AuthUser"
+
+// The props structs' types are generated from Rust into ./generated (src/page_types.rs,
+// `cargo loco task types:generate`); import them from there.
+
+// `auth` as the signed-in app's pages see it. The server sends `Auth` (generated), whose user
+// and session are null for a guest: pages a guest can open check `auth.user` first.
+export interface SignedInAuth {
   user: User
-  session: Pick<Session, "id">
+  session: AuthSession
 }
 
 export interface BreadcrumbItem {
@@ -22,38 +31,10 @@ export interface FlashData {
   notice?: string
 }
 
-export interface AccountSummary {
-  name: string
-  slug: string
-}
-
 export interface SharedProps {
-  auth: Auth
+  auth: SignedInAuth
   accounts?: AccountSummary[]
 }
 
-export type Role = "owner" | "admin" | "member"
-
-export interface Account {
-  id: number
-  name: string
-  slug: string
-}
-
-export interface User {
-  id: number
-  name: string
-  email: string
-  avatar?: string
-  verified: boolean
-  created_at: string
-  updated_at: string
-  [key: string]: unknown // This allows for additional properties...
-}
-
-export interface Session {
-  id: string
-  user_agent: string
-  ip_address: string
-  created_at: string
-}
+// The signed-in user, plus the avatar URL the layout shows when there is one.
+export type User = AuthUser & { avatar?: string }

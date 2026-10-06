@@ -115,21 +115,21 @@ injections:
 
 use axum::http::HeaderMap;
 use loco_rs::prelude::*;
-use serde_json::{json, Value};
+use serde_json::{json{% if selects | length > 0 %}, Value{% endif %}};
 
 use crate::{
     auth::CurrentAccount,
     controllers::{precognitive, render, NoPrecognition, Params},
     inertia::{redirect::Redirect, render::Inertia},
     models::{
-        {{ snake_plural }}::{self, {{ pascal_singular }}Params},
+        {{ snake_plural }}::{self, {{ pascal_singular }}Params, {{ pascal_singular }}Props},
         users::SaveError,
     },
     route_table,
 };
 
 async fn index(current: CurrentAccount, State(ctx): State<AppContext>, inertia: Inertia) -> Result<Response> {
-    let {{ snake_plural }}: Vec<Value> = {{ snake_plural }}::Model::list(&ctx.db, current.account.id)
+    let {{ snake_plural }}: Vec<{{ pascal_singular }}Props> = {{ snake_plural }}::Model::list(&ctx.db, current.account.id)
         .await?
         .iter()
         .map({{ snake_plural }}::Model::to_props)
@@ -175,7 +175,7 @@ async fn edit(
     let {{ snake_singular }} = {{ snake_plural }}::Model::find_in_account(&ctx.db, current.account.id, id).await?;
 {%- if selects | length > 0 %}
     let mut props = form_options(&ctx{% if account_selects | length > 0 %}, current.account.id{% endif %}).await?;
-    props["{{ snake_singular }}"] = {{ snake_singular }}.to_props();
+    props["{{ snake_singular }}"] = json!({{ snake_singular }}.to_props());
     render(inertia, "{{ snake_plural }}/edit", props).await
 {%- else %}
     render(inertia, "{{ snake_plural }}/edit", json!({ "{{ snake_singular }}": {{ snake_singular }}.to_props() })).await
@@ -248,21 +248,21 @@ async fn destroy(
 
 use axum::http::HeaderMap;
 use loco_rs::prelude::*;
-use serde_json::{json, Value};
+use serde_json::{json{% if selects | length > 0 %}, Value{% endif %}};
 
 use crate::{
     auth::Authenticated,
     controllers::{precognitive, render, NoPrecognition, Params},
     inertia::{redirect::Redirect, render::Inertia},
     models::{
-        {{ snake_plural }}::{self, {{ pascal_singular }}Params},
+        {{ snake_plural }}::{self, {{ pascal_singular }}Params, {{ pascal_singular }}Props},
         users::SaveError,
     },
     route_table,
 };
 
 async fn index(_: Authenticated, State(ctx): State<AppContext>, inertia: Inertia) -> Result<Response> {
-    let {{ snake_plural }}: Vec<Value> = {{ snake_plural }}::Model::list(&ctx.db)
+    let {{ snake_plural }}: Vec<{{ pascal_singular }}Props> = {{ snake_plural }}::Model::list(&ctx.db)
         .await?
         .iter()
         .map({{ snake_plural }}::Model::to_props)
@@ -308,7 +308,7 @@ async fn edit(
     let {{ snake_singular }} = {{ snake_plural }}::Model::find_by_id(&ctx.db, id).await?;
 {%- if selects | length > 0 %}
     let mut props = form_options(&ctx).await?;
-    props["{{ snake_singular }}"] = {{ snake_singular }}.to_props();
+    props["{{ snake_singular }}"] = json!({{ snake_singular }}.to_props());
     render(inertia, "{{ snake_plural }}/edit", props).await
 {%- else %}
     render(inertia, "{{ snake_plural }}/edit", json!({ "{{ snake_singular }}": {{ snake_singular }}.to_props() })).await

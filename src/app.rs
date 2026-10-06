@@ -156,6 +156,7 @@ impl Hooks for App {
         tasks.register(tasks::routes_generate::RoutesGenerate);
         tasks.register(tasks::scaffold_pages::ScaffoldPages);
         tasks.register(tasks::seed_demo::SeedDemo);
+        tasks.register(tasks::types_generate::TypesGenerate);
         // tasks-inject (do not remove this comment: `cargo loco generate task` adds above it)
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {

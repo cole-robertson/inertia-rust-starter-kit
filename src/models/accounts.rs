@@ -7,8 +7,8 @@ use loco_rs::model::{ModelError, ModelResult};
 use regex::Regex;
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 pub use super::_entities::accounts::{ActiveModel, Column, Entity, Model};
 use super::{
@@ -284,15 +284,39 @@ impl Model {
         Ok(item.update(db).await?)
     }
 
-    /// The page props for this account: `{id, name, slug}` (the frontend's `Account` type).
+    /// The page props for this account.
     #[must_use]
-    pub fn to_props(&self) -> serde_json::Value {
-        json!({
-            "id": self.id,
-            "name": self.name,
-            "slug": self.slug,
-        })
+    pub fn to_props(&self) -> AccountProps {
+        AccountProps {
+            id: self.id,
+            name: self.name.clone(),
+            slug: self.slug.clone(),
+        }
     }
+
+    /// This account in the account switcher (the `accounts` shared prop).
+    #[must_use]
+    pub fn to_summary(&self) -> AccountSummary {
+        AccountSummary {
+            name: self.name.clone(),
+            slug: self.slug.clone(),
+        }
+    }
+}
+
+/// An account on its own pages (overview, settings).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct AccountProps {
+    pub id: i64,
+    pub name: String,
+    pub slug: String,
+}
+
+/// An account in the account switcher.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct AccountSummary {
+    pub name: String,
+    pub slug: String,
 }
 
 #[cfg(test)]

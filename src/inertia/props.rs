@@ -3,6 +3,7 @@
 //! ```ignore
 //! Props::new()
 //!     .prop("user", json!({"name": "Ada"}))                      // plain value
+//!     .prop("account", Prop::serialize(&account.to_props())?)    // a typed props struct
 //!     .prop("stats", lazy(|| async { Ok(stats().await?) }))      // only evaluated when kept
 //!     .prop("permissions", defer(|| async { .. }).group("sidebar"))
 //!     .prop("posts", scroll(ScrollMetadata::new("page", None, Some(2), 1), || async { .. }))
@@ -247,6 +248,16 @@ impl Prop {
     /// A plain, already-computed value.
     pub fn value(v: impl Into<Value>) -> Self {
         Self::with_source(Source::Value(v.into()))
+    }
+
+    /// A plain prop from any `Serialize` value, e.g. a typed props struct whose TypeScript
+    /// type is generated (`src/page_types.rs`). Modifiers chain as usual:
+    /// `Prop::serialize(&list)?.once_key(key)`.
+    ///
+    /// # Errors
+    /// When serde can't turn the value into JSON (a map with non-string keys).
+    pub fn serialize(v: &impl Serialize) -> Result<Self> {
+        Ok(Self::value(serde_json::to_value(v)?))
     }
 
     /// An array whose items may be prop wrappers or nested props (a Ruby

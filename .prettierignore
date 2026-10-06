@@ -5,3 +5,4 @@ frontend/routes
 public/vite
 ssr
 target
+frontend/types/generated

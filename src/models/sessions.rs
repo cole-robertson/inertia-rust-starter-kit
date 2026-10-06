@@ -7,6 +7,8 @@
 
 use loco_rs::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder};
+use serde::Serialize;
+use ts_rs::TS;
 
 pub use super::_entities::sessions::{self, ActiveModel, Column, Entity, Model};
 use super::_entities::users;
@@ -146,5 +148,26 @@ impl Model {
             .ok_or(ModelError::EntityNotFound)?;
         Entity::delete_by_id(session.id).exec(db).await?;
         Ok(session)
+    }
+}
+
+/// A session on the settings page. `id` is the token, as in `auth.session.id`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct SessionProps {
+    pub id: String,
+    pub user_agent: Option<String>,
+    pub ip_address: Option<String>,
+    // ISO 8601, UTC.
+    pub created_at: String,
+}
+
+impl From<Model> for SessionProps {
+    fn from(session: Model) -> Self {
+        Self {
+            created_at: super::as_json_time(&session.created_at),
+            id: session.token,
+            user_agent: session.user_agent,
+            ip_address: session.ip_address,
+        }
     }
 }

@@ -58,8 +58,8 @@ injections:
   content: |-
     use loco_rs::model::{ModelError, ModelResult};
     use sea_orm::{IntoActiveModel, QueryOrder};
-    use serde::Deserialize;
-    use serde_json::json;
+    use serde::{Deserialize, Serialize};
+    use ts_rs::TS;
 
     use super::{
         _entities::{{ snake_plural }}::Column,
@@ -67,6 +67,10 @@ injections:
         users::{Errors, SaveError},
     };
     use crate::db::First;
+- into: src/page_types.rs
+  before: "^    // scaffold:types"
+  skip_if: "{{ pascal_singular }}Props>"
+  content: "    types.add::<crate::models::{{ snake_plural }}::{{ pascal_singular }}Props>();"
 - into: src/models/{{ snake_plural }}.rs
   append: true
   skip_if: "pub struct {{ pascal_singular }}Params"
@@ -283,16 +287,15 @@ injections:
             Ok(())
         }
 
-        /// The page props for this {{ snake_singular | replace(from="_", to=" ") }}: what the frontend's `{{ pascal_singular }}` type
-        /// describes (`frontend/pages/{{ snake_plural }}/form.tsx`).
+        /// The page props for this {{ snake_singular | replace(from="_", to=" ") }}.
         #[must_use]
-        pub fn to_props(&self) -> serde_json::Value {
-            json!({
-                "id": self.id,
+        pub fn to_props(&self) -> {{ pascal_singular }}Props {
+            {{ pascal_singular }}Props {
+                id: self.id,
     {%- for f in fields %}{% if f.field_name in editable %}
-                "{{ f.field_name }}": self.{{ f.field_name }},
+                {{ f.field_name }}: self.{{ f.field_name }}{% if f.rust_type is containing("String") %}.clone(){% endif %},
     {%- endif %}{% endfor %}
-            })
+            }
         }
     {%- for name in selects %}
     {%- set association = name | trim_end_matches(pat="_id") %}
@@ -303,7 +306,7 @@ injections:
         ///
         /// # Errors
         /// Database errors.
-        pub async fn {{ association }}_options(db: &DatabaseConnection{% if name in account_refs %}, account_id: i64{% endif %}) -> ModelResult<Vec<serde_json::Value>> {
+        pub async fn {{ association }}_options(db: &DatabaseConnection{% if name in account_refs %}, account_id: i64{% endif %}) -> ModelResult<Vec<super::SelectOption>> {
             let rows = super::_entities::{{ parent }}::Entity::find()
     {%- if name in account_refs %}
                 .filter(super::_entities::{{ parent }}::Column::AccountId.eq(account_id))
@@ -315,16 +318,28 @@ injections:
             Ok(rows
                 .iter()
                 .map(|row| {
+                    let id = row["id"].as_i64().unwrap_or_default();
                     // The label is the `name` column, else `title`, else `#id`: change it here.
                     let label = ["name", "title"]
                         .iter()
                         .find_map(|column| row[*column].as_str().map(str::to_owned))
-                        .unwrap_or_else(|| format!("#{}", row["id"]));
-                    json!({ "id": row["id"], "label": label })
+                        .unwrap_or_else(|| format!("#{id}"));
+                    super::SelectOption { id, label }
                 })
                 .collect())
         }
     {%- endfor %}
+    }
+
+    /// The page props of a {{ snake_singular | replace(from="_", to=" ") }}. Its TypeScript type is generated from this struct
+    /// (`frontend/types/generated/{{ pascal_singular }}Props.ts`, by `cargo loco task types:generate`),
+    /// so the pages and this struct can't drift apart.
+    #[derive(Debug, Clone, PartialEq, Serialize, TS)]
+    pub struct {{ pascal_singular }}Props {
+        pub id: i64,
+    {%- for f in fields %}{% if f.field_name in editable %}
+        pub {{ f.field_name }}: {{ f.rust_type }},
+    {%- endif %}{% endfor %}
     }
 ---
 {% set_global required = [] -%}
@@ -442,7 +457,7 @@ async fn create_show_edit_update_and_destroy_a_{{ snake_singular }}() {
         let page = inertia_get(&server, &ctx, &path).await;
         assert_eq!(page["component"], "{{ snake_plural }}/show");
         assert_eq!(page["flash"]["notice"], "{{ label }} was successfully created.");
-        assert_eq!(page["props"]["{{ snake_singular }}"], created.to_props());
+        assert_eq!(page["props"]["{{ snake_singular }}"], json!(created.to_props()));
 
 {%- if scoped %}
         let edit = route_table::edit_{{ snake_singular }}_path("acme", created.id);

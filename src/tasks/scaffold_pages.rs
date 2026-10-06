@@ -5,7 +5,8 @@
 //! `.loco-templates/`). Loco's generator cannot write this kit's React pages, so this task does,
 //! from the entity it just generated: `frontend/pages/<plural>/{index,show,new,edit,form}.tsx`
 //! rendered from `.loco-templates/scaffold/pages/*.t`, a sidebar link, and
-//! `frontend/routes/*.ts` regenerated. Existing pages are never overwritten.
+//! `frontend/routes/*.ts` and `frontend/types/generated/*.ts` regenerated. Existing pages are
+//! never overwritten.
 //!
 //! `cargo loco task scaffold:pages controller:<name>` does the same for a controller made by
 //! `cargo loco generate controller <name> [actions]...`: one placeholder page per component the
@@ -16,7 +17,7 @@ use std::{path::Path, process::Command};
 use loco_rs::prelude::*;
 use serde_json::{json, Value};
 
-use crate::tasks::routes_generate;
+use crate::tasks::{routes_generate, types_generate};
 
 /// Where the page templates live, relative to the app root.
 pub const TEMPLATE_DIR: &str = ".loco-templates/scaffold/pages";
@@ -65,6 +66,9 @@ impl Task for ScaffoldPages {
             );
         }
         println!("{}", routes_generate::write(root).map_err(Error::wrap)?);
+        // The pages import `<Singular>Props` from here: this binary was rebuilt after
+        // `generate scaffold`, so the new props struct is in `page_types::generate_ts`.
+        println!("{}", types_generate::write(root).map_err(Error::wrap)?);
         if !written.is_empty() {
             let prettier = Command::new("npx")
                 .args(["prettier", "--write", "--log-level", "warn"])
@@ -126,17 +130,8 @@ impl Field {
         })
     }
 
-    fn ts_type(&self) -> &'static str {
-        match self.rust_type.as_str() {
-            "bool" => "boolean",
-            "String" | "Date" => "string",
-            _ => "number",
-        }
-    }
-
     fn to_json(&self, tables: &[String]) -> std::result::Result<Value, String> {
         let input = self.input(tables)?;
-        let ts_type = self.ts_type();
         let association = self.association();
         Ok(json!({
             "name": self.name,
@@ -150,7 +145,6 @@ impl Field {
             "input": input,
             "step": if self.rust_type.starts_with('f') { "any" } else { "1" },
             "nullable": self.nullable,
-            "ts_type": if self.nullable { format!("{ts_type} | null") } else { ts_type.to_string() },
         }))
     }
 }
@@ -661,7 +655,6 @@ pub struct Model {
         assert_eq!(v["title_field"], "title");
         assert_eq!(v["fields"][4]["label"], "User");
         assert_eq!(v["fields"][3]["step"], "any");
-        assert_eq!(v["fields"][2]["ts_type"], "boolean | null");
     }
 
     #[test]

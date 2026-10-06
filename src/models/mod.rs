@@ -7,6 +7,15 @@ pub mod tokens;
 pub mod users;
 
 use sea_orm::prelude::DateTimeWithTimeZone;
+use serde::Serialize;
+use ts_rs::TS;
+
+/// A parent record to pick in a form's select: a scaffold's `<association>_options` props.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct SelectOption {
+    pub id: i64,
+    pub label: String,
+}
 
 /// A timestamp the way Rails' `as_json` writes it: UTC, milliseconds, `Z`
 /// (`2026-09-29T16:15:24.391Z`), whatever offset and precision the column holds.

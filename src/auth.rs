@@ -27,7 +27,8 @@ use axum::{
 };
 use loco_rs::{app::AppContext, controller::middleware::remote_ip::RemoteIP, model::ModelError};
 use sea_orm::DatabaseConnection;
-use serde_json::{json, Value};
+use serde::Serialize;
+use ts_rs::TS;
 
 use crate::{
     db::First,
@@ -111,24 +112,54 @@ pub async fn client_ip(parts: &mut Parts) -> Option<IpAddr> {
     }
 }
 
-/// The `auth` shared prop:
-/// `{user: {id,name,email,verified,created_at,updated_at} | null, session: {id} | null}`.
-/// The session id exposed to the browser is its random token, never the integer id.
+/// The `auth` shared prop: the signed-in user and session, both `null` for a guest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct Auth {
+    pub user: Option<AuthUser>,
+    pub session: Option<AuthSession>,
+}
+
+/// The signed-in user, as every page sees it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct AuthUser {
+    pub id: i64,
+    pub name: String,
+    pub email: String,
+    pub verified: bool,
+    // ISO 8601, UTC.
+    pub created_at: String,
+    // ISO 8601, UTC.
+    pub updated_at: String,
+}
+
+/// The browser's session. `id` is its random token (what `DELETE /sessions/{id}` takes), never
+/// the integer id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct AuthSession {
+    pub id: String,
+}
+
+/// The `auth` shared prop for `current`.
 #[must_use]
-pub fn auth_prop(current: Option<&CurrentSession>) -> Value {
+pub fn auth_prop(current: Option<&CurrentSession>) -> Auth {
     match current {
-        Some(CurrentSession { session, user }) => json!({
-            "user": {
-                "id": user.id,
-                "name": user.name,
-                "email": user.email,
-                "verified": user.verified,
-                "created_at": crate::models::as_json_time(&user.created_at),
-                "updated_at": crate::models::as_json_time(&user.updated_at),
-            },
-            "session": { "id": session.token },
-        }),
-        None => json!({ "user": null, "session": null }),
+        Some(CurrentSession { session, user }) => Auth {
+            user: Some(AuthUser {
+                id: user.id,
+                name: user.name.clone(),
+                email: user.email.clone(),
+                verified: user.verified,
+                created_at: crate::models::as_json_time(&user.created_at),
+                updated_at: crate::models::as_json_time(&user.updated_at),
+            }),
+            session: Some(AuthSession {
+                id: session.token.clone(),
+            }),
+        },
+        None => Auth {
+            user: None,
+            session: None,
+        },
     }
 }
 
@@ -324,17 +355,15 @@ async fn account_switcher(
     use sha2::{Digest, Sha256};
 
     let mut accounts = accounts::Model::list_for_user(db, user_id).await?;
-    let list: Vec<Value> = accounts
-        .iter()
-        .map(|a| json!({ "name": a.name, "slug": a.slug }))
-        .collect();
+    let list: Vec<accounts::AccountSummary> =
+        accounts.iter().map(accounts::Model::to_summary).collect();
     accounts.sort_by_key(|a| a.id);
     let mut digest = Sha256::new();
     for a in &accounts {
         digest.update(format!("{}:{};", a.id, a.updated_at.to_rfc3339()));
     }
     let key = format!("accounts:{}", &hex::encode(digest.finalize())[..16]);
-    Ok(crate::inertia::props::Prop::value(list).once_key(key))
+    Ok(crate::inertia::props::Prop::serialize(&list)?.once_key(key))
 }
 
 /// Register the shared props (the Rails kit's `inertia_share`): `auth`, and for a signed-in
@@ -345,7 +374,8 @@ pub fn register_shared_props(ctx: &AppContext) {
         let auth = auth_prop(current.as_ref());
         let db = ctx.db.clone();
         Box::pin(async move {
-            let props = crate::inertia::props::Props::new().prop("auth", auth);
+            let props = crate::inertia::props::Props::new()
+                .prop("auth", crate::inertia::Prop::serialize(&auth)?);
             Ok(match current {
                 Some(current) => {
                     props.prop("accounts", account_switcher(&db, current.user.id).await?)

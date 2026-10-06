@@ -8,6 +8,7 @@ pub mod inertia;
 pub mod live;
 pub mod mailers;
 pub mod models;
+pub mod page_types;
 pub mod route_table;
 pub mod start;
 pub mod tasks;

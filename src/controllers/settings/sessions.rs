@@ -2,10 +2,13 @@
 //! session's random token (what `DELETE /sessions/:id` and `auth.session.id` use).
 
 use loco_rs::prelude::*;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::{
-    auth::Authenticated, controllers::render, inertia::render::Inertia, models::sessions,
+    auth::Authenticated,
+    controllers::render,
+    inertia::render::Inertia,
+    models::sessions::{self, SessionProps},
     route_table,
 };
 
@@ -14,17 +17,10 @@ async fn index(
     State(ctx): State<AppContext>,
     inertia: Inertia,
 ) -> Result<Response> {
-    let sessions: Vec<Value> = sessions::Model::list_for_user(&ctx.db, current.user.id)
+    let sessions: Vec<SessionProps> = sessions::Model::list_for_user(&ctx.db, current.user.id)
         .await?
         .into_iter()
-        .map(|s| {
-            json!({
-                "id": s.token,
-                "user_agent": s.user_agent,
-                "ip_address": s.ip_address,
-                "created_at": crate::models::as_json_time(&s.created_at),
-            })
-        })
+        .map(SessionProps::from)
         .collect();
     render(
         inertia,

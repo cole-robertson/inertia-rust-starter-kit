@@ -4,7 +4,6 @@
 use axum::{extract::Path, http::HeaderMap};
 use loco_rs::prelude::*;
 use serde::Deserialize;
-use serde_json::Value;
 
 use crate::{
     auth::CurrentAccount,
@@ -62,7 +61,7 @@ async fn index(
                             .await?
                             .iter()
                             .map(memberships::Member::to_props)
-                            .collect::<Vec<Value>>())
+                            .collect::<Vec<_>>())
                     }),
                 )
                 .prop(

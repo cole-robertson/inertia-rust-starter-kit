@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import AppLayout from "@/layouts/app-layout"
 import SettingsLayout from "@/layouts/settings/layout"
 import { sessions as sessionsRoutes, settingsSessions } from "@/routes"
-import type { BreadcrumbItem, Session } from "@/types"
+import type { BreadcrumbItem } from "@/types"
+import type { SessionProps } from "@/types/generated/SessionProps"
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
@@ -16,7 +17,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ]
 
 interface SessionsProps {
-  sessions: Session[]
+  sessions: SessionProps[]
 }
 
 export default function Sessions({ sessions }: SessionsProps) {

@@ -4,7 +4,7 @@ use loco_rs::model::{ModelError, ModelResult};
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveValue, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use ts_rs::TS;
 
 pub use super::_entities::memberships::{ActiveModel, Column, Entity, Model};
 use super::{
@@ -18,7 +18,7 @@ pub type Memberships = Entity;
 pub const LAST_OWNER_MESSAGE: &str = "An account needs at least one owner";
 
 /// `enum :role, %w[owner admin member]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     Owner,
@@ -76,16 +76,35 @@ pub struct Member {
 }
 
 impl Member {
-    /// `{id, user: {name, email}, role, joined_at}`.
     #[must_use]
-    pub fn to_props(&self) -> serde_json::Value {
-        json!({
-            "id": self.membership.id,
-            "user": { "name": self.user.name, "email": self.user.email },
-            "role": self.membership.role,
-            "joined_at": super::as_json_time(&self.membership.created_at),
-        })
+    pub fn to_props(&self) -> MemberProps {
+        MemberProps {
+            id: self.membership.id,
+            user: MemberUser {
+                name: self.user.name.clone(),
+                email: self.user.email.clone(),
+            },
+            role: self.membership.role(),
+            joined_at: super::as_json_time(&self.membership.created_at),
+        }
     }
+}
+
+/// A member on the members page. `id` is the membership's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct MemberProps {
+    pub id: i64,
+    pub user: MemberUser,
+    pub role: Role,
+    // ISO 8601, UTC.
+    pub joined_at: String,
+}
+
+/// The member's user, as the members page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct MemberUser {
+    pub name: String,
+    pub email: String,
 }
 
 /// Tell the account's open pages that its members changed (`AccountChannel`, after commit):
