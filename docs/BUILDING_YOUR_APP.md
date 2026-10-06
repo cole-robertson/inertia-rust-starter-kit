@@ -105,7 +105,8 @@ templates in `.loco-templates/`: migration, entity, a model with params, casting
 validation (`src/models/projects.rs`), an Inertia controller (`src/controllers/projects.rs`),
 paths and routes in `src/route_table.rs`, a model test and a request test. The second writes the
 React pages (`frontend/pages/projects/`, shadcn/ui forms), adds a sidebar link, and regenerates
-`frontend/routes/`. Open http://localhost:5150/acme/projects.
+`frontend/routes/`. Restart `bin/dev` (new routes need a rebuild; Rust has no autoloading), then
+open http://localhost:5150/acme/projects.
 
 **The resource belongs to the account.** The kit adds `account:references` to the scaffold, so
 projects live at `/{account_slug}/projects`, the controller takes `CurrentAccount`, every query

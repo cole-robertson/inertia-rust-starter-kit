@@ -134,7 +134,7 @@ The names appear in tables, models, routes, pages and copy. Two ways:
 
 Accounts stay in the kit; most apps keep them (they are cheap to keep and expensive to add to
 an app that already has data). If an app really has no teams, flatten them in this order, and
-keep the tables (every user still has exactly one personal account behind the scenes):
+keep the tables (each user who signed up keeps their personal account behind the scenes):
 
 1. **Generate new resources with `--global`** (`cargo loco generate scaffold notes body:text
    --global`): plain signed-in routes, no `account_id`. Existing scoped resources can stay.
