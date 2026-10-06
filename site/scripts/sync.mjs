@@ -4,7 +4,8 @@
 // - pages.mjs's sources -> site/guide/*.md, site/reference/*.md, with links rewritten: a link to
 //   another served page stays a site link, a link to any other repo file becomes a GitHub link
 //   (and must exist, or this fails), and images are served from /repo/<path>.
-// - README's controller/page example and quick start -> site/snippets/ for the home page.
+// - README's controller/page example (and their file paths) and quick start -> site/snippets/
+//   for the home page.
 // - The favicon and wordmark -> site/public/; the mark (the wordmark's gear) -> public/mark.svg.
 // - /llms.txt (an index) and /llms-full.txt (every page, links made absolute).
 import fs from "node:fs"
@@ -121,8 +122,17 @@ const block = (lang, after) => {
   if (!m) problems.push(`README.md: no \`\`\`${lang} block after "${after}"`)
   return m ? m[1] : ""
 }
-write("snippets/controller.rs", block("rust", "A controller loads the data"))
-write("snippets/page.tsx", block("tsx", "A controller loads the data"))
+// Each example opens with a `// path/to/file` line; the home page shows that path as the
+// card's filename tab (snippets/files.json), so it comes off the code.
+const files = {}
+for (const [name, lang] of [["controller.rs", "rust"], ["page.tsx", "tsx"]]) {
+  const code = block(lang, "A controller loads the data")
+  const m = code.match(/^\/\/ (\S+)\n/)
+  if (!m) problems.push(`README.md: the ${lang} example doesn't start with a "// path" line`)
+  files[name] = m ? m[1] : name
+  write(`snippets/${name}`, m ? code.slice(m[0].length) : code)
+}
+write("snippets/files.json", JSON.stringify(files, null, 2) + "\n")
 write("snippets/quick-start.sh", block("sh", "## Quick start"))
 
 // Icons. The mark is the wordmark's first group (the gear and chevron), on its own canvas.
