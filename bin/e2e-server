@@ -16,7 +16,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 port="${PORT:-5190}"
-bin="${E2E_BIN:-target/release/inertia_rust_starter_kit-cli}"
+bin="${E2E_BIN:-${CARGO_TARGET_DIR:-target}/release/inertia_rust_starter_kit-cli}"
 
 if [ "${E2E_SKIP_BUILD:-}" != 1 ]; then
   # Incremental: near no-ops when CI / bin/ci already built these.
