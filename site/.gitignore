@@ -1,0 +1,14 @@
+node_modules/
+.vitepress/cache/
+.vitepress/dist/
+# Generated from the repo by scripts/sync.mjs; edit the sources, not these.
+guide/
+reference/
+snippets/
+public/repo/
+public/icon.svg
+public/icon.png
+public/wordmark.svg
+public/mark.svg
+public/llms.txt
+public/llms-full.txt

@@ -33,6 +33,7 @@ const COPY: &[&str] = &[
     "tests/rename.rs",
     "tests/routes_fresh.rs",
     "docs/BENCHMARK.md",
+    "site/.vitepress/config.mts",
 ];
 
 fn copy(from: &Path, to: &Path) {
@@ -172,6 +173,7 @@ fn a_dry_run_reports_what_the_real_run_changes_and_changes_nothing() {
 fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
     let root = app_copy("real");
     let benchmark = read(&root, "docs/BENCHMARK.md");
+    let site_config = read(&root, "site/.vitepress/config.mts");
     let this_test = read(&root, "tests/rename.rs");
     let lock = read(&root, "Cargo.lock");
     let old_name = crate_name(&read(&root, "Cargo.toml"));
@@ -254,6 +256,11 @@ fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
         "docs/ is history"
     );
     assert_eq!(
+        read(&root, "site/.vitepress/config.mts"),
+        site_config,
+        "site/ is the kit's website, not the app's: rename leaves it alone"
+    );
+    assert_eq!(
         read(&root, "tests/rename.rs"),
         this_test,
         "this test's expected strings are the kit's names, so a renamed app's suite stays green"
@@ -274,10 +281,10 @@ const KIT_NAMES: [&str; 3] = [
     "Inertia Rust Starter Kit",
 ];
 
-/// Where the kit's names stay after a rename: history (`docs/`, `bench/`), the rename script and
-/// this test, and links to the kit's repository (the README's clone command, the header and
-/// sidebar links).
-const KEPT_UNDER: [&str; 4] = ["docs/", "bench/", "bin/rename", "tests/rename.rs"];
+/// Where the kit's names stay after a rename: history (`docs/`, `bench/`), the kit's website
+/// (`site/`, which a renamed app deletes), the rename script and this test, and links to the
+/// kit's repository (the README's clone command, the header and sidebar links).
+const KEPT_UNDER: [&str; 5] = ["docs/", "bench/", "site/", "bin/rename", "tests/rename.rs"];
 const KIT_REPOSITORY: &str = "github.com/cole-robertson/inertia-rust-starter-kit";
 
 /// The whole app, renamed: no file outside [`KEPT_UNDER`] still names the kit. Copies every file

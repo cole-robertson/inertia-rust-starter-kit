@@ -267,6 +267,7 @@ More recipes: [accounts](.claude/skills/starter-kit/recipes/accounts.md),
 | `tests/`, `e2e/` | Rust tests, Playwright specs |
 | `config/` | Loco config per environment; app settings are under `settings:` |
 | `bin/` | `setup`, `dev`, `ci`, `rename`, `secret`, `e2e-server` |
+| `site/` | the kit's website, [inertia-rust.dev](https://inertia-rust.dev) (VitePress, built from these docs); delete it in your app |
 
 ## Tests and CI
 

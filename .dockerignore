@@ -36,6 +36,9 @@
 # Ignore agent tooling
 /.claude
 
+# Ignore the kit's website (inertia-rust.dev)
+/site
+
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*

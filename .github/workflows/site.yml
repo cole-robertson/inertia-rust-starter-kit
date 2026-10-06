@@ -1,0 +1,55 @@
+name: Site
+
+# Builds inertia-rust.dev (site/) from the docs, so a dead link or anchor fails here. Not a
+# required check; deploying is site/deploy.sh.
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "README.md"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - ".claude/skills/starter-kit/**"
+      - "public/icon.*"
+      - ".github/workflows/site.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "README.md"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - ".claude/skills/starter-kit/**"
+      - "public/icon.*"
+      - ".github/workflows/site.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Site builds, no dead links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install
+        run: npm ci --prefix site
+
+      - name: Build and check links
+        run: npm run build --prefix site

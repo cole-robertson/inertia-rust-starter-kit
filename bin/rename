@@ -7,8 +7,9 @@
 #
 # The crate name may be given as acme_crm or acme-crm; the crate and binary use acme_crm, the
 # Docker image and Cloudflare Worker use acme-crm. The current names are read from Cargo.toml,
-# config/development.yaml and deploy/cloudflare, so renaming twice works. docs/ and bench/ are
-# left alone (they describe the kit), and so are links to the kit's GitHub repository.
+# config/development.yaml and deploy/cloudflare, so renaming twice works. docs/, bench/ and site/
+# are left alone (they describe the kit; site/ is the kit's website, so delete it from your app),
+# and so are links to the kit's GitHub repository.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -58,7 +59,8 @@ if [ -z "$old_snake" ] || [ -z "$old_display" ]; then
   exit 1
 fi
 
-# Where the names live. docs/, bench/ and the build briefs are history and stay as they are.
+# Where the names live. docs/, bench/ and the build briefs are history and stay as they are;
+# site/ is the kit's own website (inertia-rust.dev), not part of the app.
 roots=(Cargo.toml Cargo.lock package.json package-lock.json Dockerfile README.md AGENTS.md
   SECURITY.md config bin src tests e2e frontend migration deploy .kamal .github)
 existing=()

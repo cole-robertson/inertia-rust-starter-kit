@@ -1,0 +1,129 @@
+/* The kit's colours: orange #CE422B (the gear), purple #7C5CFC (the chevron). */
+:root {
+  --vp-c-brand-1: #5b3fd9;
+  --vp-c-brand-2: #6a4ef0;
+  --vp-c-brand-3: #7c5cfc;
+  --vp-c-brand-soft: rgba(124, 92, 252, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #ce422b 20%, #7c5cfc 80%);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #ce422b55 40%, #7c5cfc55 60%);
+  --vp-home-hero-image-filter: blur(56px);
+
+  --vp-button-brand-bg: #5b3fd9;
+  --vp-button-brand-hover-bg: #6a4ef0;
+  --vp-button-brand-active-bg: #4c32c4;
+}
+
+.dark {
+  --vp-c-brand-1: #a993ff;
+  --vp-c-brand-2: #9278ff;
+  --vp-c-brand-3: #7c5cfc;
+  --vp-c-brand-soft: rgba(124, 92, 252, 0.2);
+  --vp-button-brand-bg: #6a4ef0;
+  --vp-button-brand-hover-bg: #7c5cfc;
+  --vp-button-brand-active-bg: #5b3fd9;
+}
+
+.VPHero .image-src {
+  max-width: 240px;
+}
+/* On phones the mark sits above the headline; keep it small so the CTAs stay near the top. */
+@media (max-width: 639px) {
+  .VPHero .image-container {
+    width: 200px;
+    height: 150px;
+  }
+  .VPHero .image {
+    margin: -8px 0 24px;
+  }
+  .VPHero .image-src {
+    max-width: 150px;
+  }
+  .VPHero .image-bg {
+    width: 140px;
+    height: 140px;
+  }
+}
+@media (min-width: 960px) {
+  .VPHero .image-src {
+    max-width: 320px;
+  }
+}
+
+/* Home page sections below the hero and the feature cards. */
+.home-section {
+  margin-top: 64px;
+}
+.home-section > h2:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+.vp-doc .lede {
+  font-size: 1.1rem;
+  color: var(--vp-c-text-2);
+}
+
+/* Light/dark pairs of images. */
+html:not(.dark) .dark-only,
+html.dark .light-only {
+  display: none;
+}
+
+.screenshot {
+  display: block;
+  margin: 32px auto 0;
+  max-width: min(100%, 880px);
+  border-radius: 12px;
+  border: 1px solid var(--vp-c-divider);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* The numbers: a grid of stat tiles. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin: 24px 0 16px;
+}
+.stat {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: var(--vp-c-bg-soft);
+}
+.stat .value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--vp-c-text-1);
+}
+.stat .label {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--vp-c-text-2);
+}
+
+/* "The Inertia way": three short steps. */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.steps > div {
+  border-left: 3px solid var(--vp-c-brand-3);
+  padding: 4px 0 4px 16px;
+}
+.steps strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.vp-doc .steps p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--vp-c-text-2);
+}

@@ -1,0 +1,16 @@
+{
+  "name": "inertia-rust-site",
+  "private": true,
+  "type": "module",
+  "description": "inertia-rust.dev: the kit's landing page and docs (VitePress). Not part of the app.",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "dev": "node scripts/sync.mjs && vitepress dev",
+    "build": "node scripts/sync.mjs && vitepress build && node scripts/check-links.mjs",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4",
+    "wrangler": "^4.147.0"
+  }
+}
