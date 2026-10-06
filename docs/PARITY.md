@@ -264,7 +264,7 @@ primitives, `application.css` and `types/globals.d.ts`.
 | `.kamal/hooks/*.sample` | 9 samples | same 9 | same bytes | |
 | `.kamal/secrets` | RAILS_MASTER_KEY | SECRET_KEY_BASE, MAILER_PASSWORD | intentional (no credentials file) | |
 | README "Enabling SSR" | R:README.md:43 | K:README.md "Server-side rendering" | same content, adapted | |
-| LICENSE (MIT) | R:LICENSE | K:LICENSE | same MIT text; the port's copyright, the Rails kit's as "Portions copyright" | |
+| LICENSE (MIT) | R:LICENSE | K:LICENSE, K:NOTICE | same MIT text; LICENSE carries the port's copyright only (so GitHub detects MIT), NOTICE reproduces the Rails kit's license | |
 | `.node-version`, `.prettierrc` | | | same bytes | |
 
 ### Tests (R:spec → this kit)

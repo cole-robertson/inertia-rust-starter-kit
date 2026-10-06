@@ -1,6 +1,9 @@
+This project includes portions of the Inertia Rails React Starter Kit
+(https://github.com/inertia-rails/react-starter-kit), used under the MIT License:
+
 MIT License
 
-Copyright (c) 2026 Cole Robertson
+Copyright (c) 2026 Svyatoslav Kryukov
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
