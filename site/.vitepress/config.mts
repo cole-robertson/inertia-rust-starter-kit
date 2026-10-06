@@ -13,7 +13,7 @@ function githubSlug(text: string) {
 
 const title = "Inertia Rust"
 const description =
-  "React pages, a Rust server, no API: an Inertia.js v3 + React 19 starter kit on Loco. Auth, accounts, live updates, generators and agent skills, served by one Rust binary."
+  "React pages, Rust server, no API: an Inertia.js v3 + React 19 starter kit on Loco. Auth, accounts, live updates, generators and agent skills, served by one Rust binary."
 
 export default defineConfig({
   lang: "en-US",
@@ -25,7 +25,7 @@ export default defineConfig({
   // Dead links fail the build; only http://localhost:5150 and friends (the app you run) are exempt.
   ignoreDeadLinks: "localhostLinks",
   // The generated snippets are included into index.md, not pages of their own.
-  srcExclude: ["snippets/**", "README.md", "og/**"],
+  srcExclude: ["snippets/**", "partials/**", "README.md", "og/**"],
   sitemap: { hostname: SITE },
   // The docs are written for GitHub and link to its heading anchors (`#flyio`,
   // `#single-binary--systemd`), so the site makes the same ids.
@@ -48,7 +48,7 @@ export default defineConfig({
   transformPageData(pageData) {
     const path = pageData.relativePath.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "")
     const pageTitle = pageData.frontmatter.title || pageData.title
-    const fullTitle = pageTitle && pageTitle !== title ? `${pageTitle} · ${title}` : `${title}: React pages, a Rust server, no API`
+    const fullTitle = pageTitle && pageTitle !== title ? `${pageTitle} · ${title}` : `${title}: React pages, Rust server, no API`
     const desc = pageData.frontmatter.description || pageData.description || description
     pageData.frontmatter.editSource = sourceOf[pageData.relativePath] ?? `site/${pageData.relativePath}`
     pageData.frontmatter.head ??= []
