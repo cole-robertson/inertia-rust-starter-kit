@@ -2,7 +2,7 @@
 
 `deploy/cloudflare/` runs the app on Cloudflare Containers: a Worker on your domain forwards
 every request to one container running the kit's Docker image. The kit's own public demo,
-**https://rust.rebulk.com**, runs this way. Its demo login isn't published; sign up there instead
+**https://demo.inertia-rust.dev**, runs this way. Its demo login isn't published; sign up there instead
 (the database resets when the container sleeps). Its settings live in a git-ignored
 `deploy/cloudflare/.env.local`, not in the repo.
 
@@ -45,7 +45,7 @@ defaults (`bin/rename` changes them).
 ## How it fits together
 
 ```
-browser ── $CF_DOMAIN, e.g. rust.rebulk.com (Worker custom domain)
+browser ── $CF_DOMAIN, e.g. demo.inertia-rust.dev (Worker custom domain)
              └─ Worker `inertia-rust` (deploy/cloudflare/src/index.ts)
                   └─ Durable Object `App`, instance "app"
                        └─ Container: the kit's Docker image (CSR build), port 8080

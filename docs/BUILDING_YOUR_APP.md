@@ -189,7 +189,7 @@ non-root user). SQLite lives in `/app/storage`; migrations run on boot.
 3. `kamal setup` once, then `kamal deploy`. Details in the README's
    [Deploy](../README.md#deploy) section, "Kamal, on your own server".
 
-**Cloudflare Containers** (what runs the kit's demo, https://rust.rebulk.com):
+**Cloudflare Containers** (what runs the kit's demo, https://demo.inertia-rust.dev):
 `deploy/cloudflare/` is a Worker that forwards to one container running the image. Its
 settings are not in the repo:
 
