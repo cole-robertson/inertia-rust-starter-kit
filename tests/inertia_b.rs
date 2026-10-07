@@ -573,6 +573,58 @@ fn prefetch_is_read_from_purpose_sec_purpose_or_x_moz_in_any_case() {
     assert!(!redirect::is_prefetch(&HeaderMap::new()));
 }
 
+#[tokio::test]
+async fn a_prefetch_neither_shows_nor_consumes_nor_writes_the_flash() {
+    let app = flash_app();
+    let cookie = flash_cookie_after_set(&app).await;
+
+    // Prefetching the page the flash is meant for: it sees no flash and the
+    // cookie stays.
+    let res = send(
+        &app,
+        Request::get("/show")
+            .header(header::COOKIE, &cookie)
+            .header("purpose", "prefetch")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        set_cookie(&set_cookies(&res), "_flash").is_none(),
+        "a prefetch must not delete the flash"
+    );
+    let got: FlashState = serde_json::from_str(&body_string(res).await).unwrap();
+    assert!(
+        got.is_empty(),
+        "a prefetch must not show the flash: {got:?}"
+    );
+
+    // The real visit still gets it.
+    let res = send(
+        &app,
+        Request::get("/show")
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    let got: FlashState = serde_json::from_str(&body_string(res).await).unwrap();
+    assert_eq!(got.notice.as_deref(), Some("Saved"));
+
+    // A prefetch that answers with a flash-carrying redirect does not
+    // overwrite the cookie.
+    let res = send(
+        &app,
+        Request::post("/set")
+            .header("sec-purpose", "prefetch")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+    assert!(set_cookie(&set_cookies(&res), "_flash").is_none());
+}
+
 // ---------------------------------------------------------------- CSRF
 
 fn csrf_app(settings: Arc<Settings>) -> Router {

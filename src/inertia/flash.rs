@@ -7,6 +7,10 @@
 //! - Response carrying `FlashConsumed` (a render): the cookie is deleted,
 //!   unless the status is a redirect (301/302/303/307/308) or 409, where it
 //!   must survive until the next render.
+//! - A prefetch (`Purpose: prefetch`, see [`super::redirect::is_prefetch`])
+//!   leaves the cookie alone: it reads an empty flash, never deletes the
+//!   cookie and never writes one. The page it builds may be shown later or
+//!   never, so it must not take the flash from the visit that follows.
 
 use std::sync::Arc;
 
@@ -20,6 +24,7 @@ use axum::{
 
 use super::config::Settings;
 use super::cookies;
+use super::redirect::is_prefetch;
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FlashState {
@@ -64,6 +69,17 @@ async fn middleware(
     mut req: Request,
     next: Next,
 ) -> Response {
+    if is_prefetch(req.headers()) {
+        req.extensions_mut()
+            .insert(IncomingFlash(Arc::new(FlashState::default())));
+        let res = next.run(req).await;
+        if res.extensions().get::<OutgoingFlash>().is_some() {
+            tracing::info!(
+                "flash on a prefetch response dropped; prefetches never touch the flash"
+            );
+        }
+        return res;
+    }
     let key = cookies::flash_key(&settings);
     let had_cookie = cookies::request_jar(req.headers())
         .get(cookies::FLASH_COOKIE)

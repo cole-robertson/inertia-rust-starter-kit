@@ -14,6 +14,10 @@ into the kit's own Inertia layer:
   `Location` contains `#` gets `409` + `X-Inertia-Redirect`, and the client visits the URL
   itself (fetch drops fragments when it follows a redirect). Prefetches still get the redirect.
   As inertia-laravel does.
+- **Prefetches leave the flash alone.** A request with `Purpose: prefetch` (what `<Link
+  prefetch>` sends; also `Sec-Purpose` and `X-Moz`) neither shows, consumes nor writes the
+  flash, so hovering a prefetching link no longer eats the "Saved" notice meant for the visit.
+  `inertia::redirect::is_prefetch` reads the headers.
 - **deploy/cloudflare pins `sharp` to ^0.35.5** with an npm override, for GHSA-wq5f-xc86-pv6w
   (high severity; `sharp` comes in through `wrangler`, `miniflare` and `cf`, whose own releases
   still pin 0.35.4). Remove the override once they move.
