@@ -8,6 +8,10 @@
 //!   409 + `X-Inertia-Location`: XHR can't follow cross-origin redirects, the
 //!   client does a full `window.location` visit instead. Headers (notably
 //!   Set-Cookie) are kept; the body is dropped.
+//! - Inertia request redirected (201/301/302/303/307/308) to a URL with a
+//!   `#fragment` becomes 409 + `X-Inertia-Redirect`: fetch drops the
+//!   fragment when it follows a redirect, so the client visits the URL
+//!   itself. Not for prefetches (inertia-laravel's Middleware).
 
 use std::sync::Arc;
 
@@ -27,9 +31,21 @@ use super::flash::{FlashState, OutgoingFlash};
 
 pub const X_INERTIA: HeaderName = HeaderName::from_static("x-inertia");
 pub const X_INERTIA_LOCATION: HeaderName = HeaderName::from_static("x-inertia-location");
+pub const X_INERTIA_REDIRECT: HeaderName = HeaderName::from_static("x-inertia-redirect");
 
 pub fn is_inertia(headers: &HeaderMap) -> bool {
     headers.get(X_INERTIA).is_some_and(|v| v == "true")
+}
+
+/// The client is prefetching the page, not visiting it: `Purpose` (sent by
+/// Inertia's prefetch), `Sec-Purpose` or `X-Moz` is `prefetch`, in any case.
+/// Laravel's `Request::prefetch()`, inertia-omega's `Request::is_prefetch`.
+pub fn is_prefetch(headers: &HeaderMap) -> bool {
+    ["purpose", "sec-purpose", "x-moz"].iter().any(|name| {
+        headers
+            .get(*name)
+            .is_some_and(|v| v.as_bytes().eq_ignore_ascii_case(b"prefetch"))
+    })
 }
 
 /// A 302 redirect that carries flash state to the next request.
@@ -165,6 +181,7 @@ async fn middleware(State(settings): State<Arc<Settings>>, req: Request, next: N
         return next.run(req).await;
     }
     let method = req.method().clone();
+    let prefetch = is_prefetch(req.headers());
     let host = req
         .headers()
         .get(header::HOST)
@@ -197,6 +214,29 @@ async fn middleware(State(settings): State<Arc<Settings>>, req: Request, next: N
     if matches!(status, 301 | 302) && matches!(method, Method::PUT | Method::PATCH | Method::DELETE)
     {
         *res.status_mut() = StatusCode::SEE_OTHER;
+    }
+
+    // inertia-laravel Middleware#handle: `$isRedirect && redirectHasFragment
+    // && ! $request->prefetch()` → onRedirectWithFragment (409 +
+    // X-Inertia-Redirect). Kept: other headers and the response extensions
+    // (so the flash layer still writes an outgoing flash).
+    if matches!(status, 201 | 301 | 302 | 303 | 307 | 308) && !prefetch {
+        let fragment = res
+            .headers()
+            .get(header::LOCATION)
+            .is_some_and(|v| v.as_bytes().contains(&b'#'));
+        if fragment {
+            let value = res
+                .headers_mut()
+                .remove(header::LOCATION)
+                .expect("checked above");
+            let (mut parts, _body) = res.into_parts();
+            parts.status = StatusCode::CONFLICT;
+            parts.headers.insert(X_INERTIA_REDIRECT, value);
+            parts.headers.remove(header::CONTENT_TYPE);
+            parts.headers.remove(header::CONTENT_LENGTH);
+            return Response::from_parts(parts, Body::empty());
+        }
     }
     res
 }

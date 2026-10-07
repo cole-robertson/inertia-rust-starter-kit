@@ -10,6 +10,10 @@ into the kit's own Inertia layer:
   not 300 ms. The props and every metadata list (`deferredProps`, `mergeProps`, `onceProps`,
   `rescuedProps`, ...) are still in prop order, and the error, when several fail, is the first
   one in prop order.
+- **Redirects to a `#fragment` keep it.** An Inertia request answered with a redirect whose
+  `Location` contains `#` gets `409` + `X-Inertia-Redirect`, and the client visits the URL
+  itself (fetch drops fragments when it follows a redirect). Prefetches still get the redirect.
+  As inertia-laravel does.
 - **deploy/cloudflare pins `sharp` to ^0.35.5** with an npm override, for GHSA-wq5f-xc86-pv6w
   (high severity; `sharp` comes in through `wrangler`, `miniflare` and `cf`, whose own releases
   still pin 0.35.4). Remove the override once they move.

@@ -50,6 +50,7 @@ The controllers agent uses these session helpers: `set_session_token`, `read_ses
 - The middleware applies only to requests with `X-Inertia: true`. It does two things, both ported from `InertiaRails::Middleware`:
   - **External redirects:** the `Location` of a 301/302/303 is first resolved against `app_url`, the way a browser resolves it, so scheme-relative `//evil.example` counts as absolute while `/path` and `path` stay internal. If the result differs from both `app_url`'s origin and the request `Host` (scheme, host or port), the response becomes a 409 with `X-Inertia-Location`. Other headers are kept, Set-Cookie in particular (it matters in the middle of an OAuth flow). The body, Content-Type and Content-Length are dropped.
   - **Method rewrite:** a 301/302 answering a PUT, PATCH or DELETE becomes a 303, so the browser follows it with a GET.
+  - **Fragment redirects:** a 201/301/302/303/307/308 whose `Location` contains `#` becomes a 409 with `X-Inertia-Redirect: <location>`, unless the request is a prefetch. `fetch` drops the fragment when it follows a redirect, so the client visits the URL itself (`router.visit`, as a GET) and keeps the `#section`. Other headers (Set-Cookie) and the response extensions are kept, so a flash still rides along; the body is dropped. This is inertia-laravel's `Middleware#handle` → `onRedirectWithFragment` (also in inertia-omega's `protocol::after`); inertia-rails doesn't do it. The external-redirect rule runs first, so an external URL with a fragment is still an `X-Inertia-Location` visit.
 
 ## CSRF (`csrf.rs`)
 

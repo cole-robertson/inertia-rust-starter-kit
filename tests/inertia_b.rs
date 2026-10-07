@@ -493,6 +493,86 @@ async fn scheme_relative_redirect_on_inertia_request_becomes_409() {
     assert_eq!(res.headers()["x-inertia-location"], "//evil.example/phish");
 }
 
+/// A route answering `status` with `Location: /article#section`, a cookie and a flash.
+fn fragment_app() -> Router {
+    let router = Router::new().route(
+        "/{status}",
+        get(
+            |axum::extract::Path(status): axum::extract::Path<u16>| async move {
+                let mut res = Redirect::to("/article#section")
+                    .notice("Saved")
+                    .into_response();
+                *res.status_mut() = StatusCode::from_u16(status).unwrap();
+                res.headers_mut()
+                    .append(header::SET_COOKIE, "state=abc".parse().unwrap());
+                res
+            },
+        )
+        .post(|| async { Redirect::to("/article#section") }),
+    );
+    flash::layer(redirect::layer(router, settings()), settings())
+}
+
+// inertia-laravel MiddlewareTest: test_redirect_with_hash_fragment_*.
+#[tokio::test]
+async fn inertia_redirect_to_a_fragment_becomes_409_with_x_inertia_redirect() {
+    let app = fragment_app();
+    for status in [201, 301, 302, 303, 307, 308] {
+        let res = send(&app, inertia(Method::GET, &format!("/{status}"))).await;
+        assert_eq!(res.status(), StatusCode::CONFLICT, "{status}");
+        assert_eq!(res.headers()["x-inertia-redirect"], "/article#section");
+        assert!(res.headers().get(header::LOCATION).is_none());
+        let cookies = set_cookies(&res);
+        assert!(cookies.contains(&"state=abc".to_owned()), "{cookies:?}");
+        assert!(
+            set_cookie(&cookies, "_flash").is_some(),
+            "the flash still rides to the next visit"
+        );
+        assert_eq!(body_string(res).await, "");
+    }
+    let res = send(&app, inertia(Method::POST, "/302")).await;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    assert_eq!(res.headers()["x-inertia-redirect"], "/article#section");
+}
+
+#[tokio::test]
+async fn fragment_redirects_stay_redirects_for_prefetches_and_plain_requests() {
+    let app = fragment_app();
+    for (name, value) in [
+        ("purpose", "prefetch"),
+        ("sec-purpose", "Prefetch"),
+        ("x-moz", "PREFETCH"),
+    ] {
+        let mut req = inertia(Method::GET, "/302");
+        req.headers_mut().insert(name, value.parse().unwrap());
+        let res = send(&app, req).await;
+        assert_eq!(res.status(), StatusCode::FOUND, "{name}: {value}");
+        assert_eq!(res.headers()[header::LOCATION], "/article#section");
+    }
+    let plain = Request::get("/302").body(Body::empty()).unwrap();
+    let res = send(&app, plain).await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+    assert_eq!(res.headers()[header::LOCATION], "/article#section");
+    // Without a fragment nothing changes.
+    let res = send(&redirect_app(), inertia(Method::POST, "/items")).await;
+    assert_eq!(res.status(), StatusCode::FOUND);
+}
+
+#[test]
+fn prefetch_is_read_from_purpose_sec_purpose_or_x_moz_in_any_case() {
+    let headers = |name: &'static str, value: &'static str| {
+        let mut h = HeaderMap::new();
+        h.insert(name, value.parse().unwrap());
+        h
+    };
+    assert!(redirect::is_prefetch(&headers("purpose", "prefetch")));
+    assert!(redirect::is_prefetch(&headers("purpose", "Prefetch")));
+    assert!(redirect::is_prefetch(&headers("sec-purpose", "prefetch")));
+    assert!(redirect::is_prefetch(&headers("x-moz", "PREFETCH")));
+    assert!(!redirect::is_prefetch(&headers("purpose", "prerender")));
+    assert!(!redirect::is_prefetch(&HeaderMap::new()));
+}
+
 // ---------------------------------------------------------------- CSRF
 
 fn csrf_app(settings: Arc<Settings>) -> Router {
