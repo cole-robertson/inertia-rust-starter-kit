@@ -62,4 +62,6 @@ assert!(mails[0].contains("To: one@example.com"));
 assert!(mails[0].contains("Subject: Your project"));
 ```
 
-`tests/requests/mailers.rs` has more (decoding quoted-printable bodies with `decode_qp`).
+`tests/requests/mailers.rs` has more (decoding quoted-printable bodies with `decode_qp`). A
+non-ASCII subject (`Daily · Oct 8`, an accent) goes out RFC 2047 encoded (`=?utf-8?b?…?=`), so
+match it on `decode_qp(&mails[0])`, which decodes the headers too, as `lastMailTo` does.
