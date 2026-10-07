@@ -13,7 +13,7 @@ user.
 |---|---|
 | `subscriptions` table: owner id, `stripe_customer_id`, `stripe_subscription_id`, `status`, `price_id`, `current_period_end` | `cargo loco generate model subscriptions ...` |
 | Stripe HTTP calls | a small module over `reqwest` (already a dependency) against Stripe's REST API, or the `async-stripe` crate; keys in `settings:` via `get_env(name="STRIPE_SECRET_KEY")` |
-| Checkout | `POST /billing/checkout` creates a Checkout Session, then redirect to Stripe's URL (an external redirect: Inertia needs `inertia::redirect::location`, which answers `409` + `X-Inertia-Location`, not a plain `Redirect`) |
+| Checkout | `POST /billing/checkout` creates a Checkout Session, then redirect to Stripe's URL (an external redirect: extract `omega::Inertia` and return `inertia.location(url)`, which answers `409` + `X-Inertia-Location` to an Inertia visit; a plain `Redirect` to another origin gets the same 409 from the Inertia layer) |
 | Customer portal | `POST /billing/portal`, same external-redirect pattern |
 | Webhook | `POST /webhooks/stripe`: verify the `Stripe-Signature` HMAC over the **raw body** (`axum::body::Bytes`, not `Params`), then enqueue a worker and return 200 fast |
 | Plan checks | `subscriptions::Model::active_for(owner)` used by an extractor or in handlers; share `billing.plan` as a prop |

@@ -2,25 +2,46 @@
 
 ## Unreleased
 
-Four ideas from inertia-omega (the Inertia team's Rust adapter) and inertia-laravel, ported
-into the kit's own Inertia layer:
-
-- **Lazy props resolve concurrently.** Sibling lazy and deferred props, and those on nested
-  levels, run together instead of one after another: three 100 ms props now cost about 100 ms,
-  not 300 ms. The props and every metadata list (`deferredProps`, `mergeProps`, `onceProps`,
-  `rescuedProps`, ...) are still in prop order, and the error, when several fail, is the first
-  one in prop order.
-- **Redirects to a `#fragment` keep it.** An Inertia request answered with a redirect whose
-  `Location` contains `#` gets `409` + `X-Inertia-Redirect`, and the client visits the URL
-  itself (fetch drops fragments when it follows a redirect). Prefetches still get the redirect.
-  As inertia-laravel does.
+- **The Inertia protocol runs on [inertia-omega](https://github.com/inertiajs/inertia-omega),**
+  the Inertia team's Rust adapter (a port of inertia-laravel), instead of the kit's own
+  resolver: props and partial reloads, the page object, JSON or the HTML document, asset
+  versioning and the redirect rules. Until omega is on crates.io it is a git dependency on a
+  fork carrying fixes that are open as pull requests. `src/inertia/` keeps what is the kit's own
+  and wires it into omega: Rails-style flash (`Redirect::to(..).notice(..)`) in the encrypted
+  `_flash` cookie, CSRF, the CSP nonce, meta tags, precognition, the external-redirect 409,
+  the asset-version reload on `app_url`, the HTML document and the SSR client. Controllers
+  build props with `.with(..)` instead of `.prop(..)`; `render(..).await` is unchanged.
+  What it brings:
+  - **Lazy props resolve concurrently.** Sibling lazy and deferred props run together instead
+    of one after another; the props and every metadata list are still in prop order.
+  - **Redirects to a `#fragment` keep it.** An Inertia request answered with a redirect whose
+    `Location` contains `#` gets `409` + `X-Inertia-Redirect`, and the client visits the URL
+    itself (fetch drops fragments when it follows a redirect). Prefetches still get the
+    redirect. As inertia-laravel does.
+  - **Deferred scroll props report `mergeProps: ["users"]` on the first visit,** as
+    inertia-rails, inertia-laravel and inertia-omega do; the partial reload that loads them
+    reports `users.data`.
+  - On the wire, as inertia-laravel: `clearHistory`/`encryptHistory` are sent only when true,
+    once props carry `expiresAt: null`, every response has `Vary: X-Inertia`, and the
+    asset-version 409 also sends `X-Inertia-Version`.
+  - **Deploying:** the `_flash` cookie now holds omega's session keys, so a flash set by the
+    previous build (one in flight mid-redirect at deploy time) is dropped on the next request.
+    Sessions, CSRF tokens and the database carry over (no migration); rolling back is the same.
+  - **Upgrading an app made from the kit:** take `src/inertia/` from this release whole (keep
+    your own `config.rs` settings), `inertia::render::layer` replaces the `version` and
+    `redirect` layers in `app.rs`, and add the `omega` dependency and `deny.toml` entry. Then
+    rename: `Props::prop(k, v)` → `.with(k, v)`; `Prop::serialize(&x)?` → pass `x` (any
+    `Serialize`); `.once_key(k)` → `.once_as(k)`; `.expires_in(d)` / `.expires_at(ms)` →
+    `.until(d)`; `Props::from_json(v)` → `v.into_props()?` (`IntoProps`); `Prop::array` /
+    `lazy_prop` → a `Vec` or a closure returning the value. **Infinite scroll changed shape:**
+    `scroll(ScrollMetadata, closure)` is now `scroll(Paginator)` / `scroll_with(..)`, and the
+    items always arrive wrapped, `{data: [...]}` with `mergeProps: ["x.data"]` (`.wrapper(..)`
+    renames the key). A page that read the prop as a bare array must read `x.data`.
 - **Prefetches leave the flash alone.** A request with `Purpose: prefetch` (what `<Link
   prefetch>` sends; also `Sec-Purpose` and `X-Moz`) neither shows, consumes nor writes the
   flash, so hovering a prefetching link no longer eats the "Saved" notice meant for the visit.
-  `inertia::redirect::is_prefetch` reads the headers.
-- **Deferred scroll props report `mergeProps: ["users"]` on the first visit,** as inertia-rails,
-  inertia-laravel and inertia-omega do; the partial reload that loads them still reports
-  `users.data`.
+  `inertia::redirect::is_prefetch` reads the headers. The kit's own addition; omega,
+  inertia-laravel and inertia-rails don't have it.
 - **Error pages are readable with compression on.** A handler's 404 (an unknown invitation, a
   missing record) went out as `public/404.html` with the compressed body's `Content-Encoding`
   still set, so browsers couldn't decode it; the exceptions layer now drops it.
