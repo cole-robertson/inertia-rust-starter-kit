@@ -42,6 +42,10 @@ Prettier, because a different name changes import order and line wrapping (it ru
 first if `node_modules` is missing). It's safe to run again. `tests/rename.rs`
 covers it, and a renamed copy builds and passes the full suite.
 
+`site/` is the kit's own website and `.github/workflows/site.yml` builds it; your app needs
+neither, so `git rm -r site .github/workflows/site.yml` (`bin/rename` reminds you while they're
+there).
+
 ## 2. Set up and run
 
 ```sh
