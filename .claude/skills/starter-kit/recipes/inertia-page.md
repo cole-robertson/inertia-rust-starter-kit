@@ -76,6 +76,7 @@ no page test.
 ```sh
 cargo loco generate controller files show:id       # /{account_slug}/files/{id}, an i64
 cargo loco generate controller files show:slug     # /{account_slug}/files/{slug}, a String
+cargo loco generate controller files show:token    # any other name too: {token}, a String
 cargo loco generate controller files show:*path    # /{account_slug}/files/{*path}, a glob
 ```
 
