@@ -267,9 +267,10 @@ pub fn entity_tables(root: &Path) -> Vec<(String, bool)> {
     tables
 }
 
-/// What to run after `cargo loco generate migration <name>` succeeds, or `None` for any other
-/// command. Unlike `generate model`, Loco doesn't migrate or regenerate the entities here, and
-/// once code uses the new columns the CLI that would regenerate them no longer builds.
+/// What to say after `cargo loco generate migration <name>` succeeds, or `None` for any other
+/// command. Loco's own message names `db migrate && db entities`, but not that (unlike
+/// `generate model`) it ran neither, nor that once code uses the new columns the CLI that would
+/// regenerate the entities no longer builds.
 #[must_use]
 pub fn migration_next_steps(args: &[String]) -> Option<&'static str> {
     if args.iter().any(|a| a == "-h" || a == "--help") {
@@ -280,10 +281,10 @@ pub fn migration_next_steps(args: &[String]) -> Option<&'static str> {
         ["generate" | "g", "migration", _]
     )
     .then_some(
-        "Next, before any code uses the new columns (the CLI has to build to run these):\n\n  \
-         cargo loco db migrate && cargo loco db entities\n\n\
-         and commit src/models/_entities/. Edit the migration first if it needs an index or a \
-         unique key; to change it after it ran: `cargo loco db down`, edit, then both again. \
+        "Not run yet: `cargo loco db migrate && cargo loco db entities`. Run both before any \
+         code uses the new columns (the CLI has to build to run them), then commit \
+         src/models/_entities/. Edit the migration first if it needs an index or a unique key; \
+         to change it after it ran: `cargo loco db down`, edit, then both again. \
          tests/entities_fresh.rs fails while the committed entities are stale.",
     )
 }
