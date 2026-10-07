@@ -21,6 +21,8 @@ into the kit's own Inertia layer:
 - **Deferred scroll props report `mergeProps: ["users"]` on the first visit,** as inertia-rails,
   inertia-laravel and inertia-omega do; the partial reload that loads them still reports
   `users.data`.
+- **site/ pins `sharp` to ^0.35.5** too, for the same advisory (it comes in through the
+  site's `wrangler`, via `miniflare`).
 - **deploy/cloudflare pins `sharp` to ^0.35.5** with an npm override, for GHSA-wq5f-xc86-pv6w
   (high severity; `sharp` comes in through `wrangler`, `miniflare` and `cf`, whose own releases
   still pin 0.35.4). Remove the override once they move.
