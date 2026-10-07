@@ -106,6 +106,44 @@ async fn errors_and_flash_survive_exactly_one_redirect() {
 
 #[tokio::test]
 #[serial]
+async fn a_prefetch_does_not_take_the_flash_from_the_visit_that_follows() {
+    with_app(|mut server, ctx| async move {
+        sign_in(&mut server, &ctx, ONE).await;
+        let res = server
+            .patch(route_table::SETTINGS_PROFILE)
+            .add_header("x-inertia", "true")
+            .json(&json!({ "name": "Renamed" }))
+            .await;
+        assert_eq!(res.status_code(), 303);
+
+        // Inertia's <Link prefetch> sends `Purpose: prefetch`.
+        let res = server
+            .get(route_table::SETTINGS_PROFILE)
+            .add_header("x-inertia", "true")
+            .add_header("x-inertia-version", asset_version(&ctx))
+            .add_header("purpose", "prefetch")
+            .await;
+        assert_eq!(res.status_code(), 200);
+        assert!(res.json::<Value>().get("flash").is_none());
+        assert!(
+            !res.headers()
+                .get_all("set-cookie")
+                .iter()
+                .any(|c| c.to_str().unwrap().starts_with("_flash=")),
+            "a prefetch leaves the flash cookie alone"
+        );
+
+        let page = inertia_get(&server, &ctx, route_table::SETTINGS_PROFILE).await;
+        assert_eq!(
+            page["flash"],
+            json!({ "notice": "Your profile has been updated" })
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn the_initial_visit_is_an_html_document_with_the_page_in_a_script_element() {
     with_app(|mut server, ctx| async move {
         sign_in(&mut server, &ctx, ONE).await;

@@ -41,6 +41,7 @@ The controllers agent uses these session helpers: `set_session_token`, `read_ses
 - **Response with `OutgoingFlash`:** the middleware writes the cookie, replacing whatever was there.
 - **Response with `FlashConsumed`** (inserted by the render path): the middleware deletes the cookie, **unless** the status is 301/302/303/307/308 or 409. This matches inertia-rails `keep_inertia_session_options?`: the flash survives redirects and version-mismatch reloads until a render actually shows it.
 - **Any other response** (JSON endpoints, assets, …) leaves the cookie alone.
+- **Prefetch requests** (`Purpose`, `Sec-Purpose` or `X-Moz: prefetch`, `redirect::is_prefetch`) never touch the cookie: the handler sees an empty `IncomingFlash`, nothing is deleted, and an `OutgoingFlash` on the response is dropped (logged at info). A prefetched page may be shown later or never; if it consumed the flash, the real visit would lose it. Neither inertia-rails nor inertia-laravel has this rule (a prefetch that renders a page reads their flash like any visit); it is this kit's addition, since the kit's own sidebar links use `<Link prefetch>`. It guards the race where a hover prefetch lands between a form's redirect and the visit that follows it. The cost: Inertia shows a prefetched response, flash included, when the link is clicked, so a flash that a *prefetched* redirect carries (hovering an account you were removed from: "That account isn't available") is dropped, and the click shows the home page without the alert.
 
 ## Redirects (`redirect.rs`)
 

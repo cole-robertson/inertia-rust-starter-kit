@@ -175,7 +175,10 @@ B's flash layer keeps the flash on 409 responses.
 
 ## Prefetch requests
 
-`redirect::is_prefetch(&headers)` is true when `Purpose`, `Sec-Purpose` or `X-Moz` is `prefetch` (any case), as Laravel's `Request::prefetch()` and inertia-omega's `Request::is_prefetch` read it. Inertia's `<Link prefetch>` sends `Purpose: prefetch`. The redirect layer treats a prefetch differently (see [INERTIA_SECURITY.md](INERTIA_SECURITY.md)): a redirect to a URL with a `#fragment` stays a redirect instead of becoming a 409.
+`redirect::is_prefetch(&headers)` is true when `Purpose`, `Sec-Purpose` or `X-Moz` is `prefetch` (any case), as Laravel's `Request::prefetch()` and inertia-omega's `Request::is_prefetch` read it. Inertia's `<Link prefetch>` sends `Purpose: prefetch`. Two layers treat a prefetch differently (see [INERTIA_SECURITY.md](INERTIA_SECURITY.md)):
+
+- the flash layer leaves the `_flash` cookie alone, so a prefetched page shows no flash and the visit that follows still gets it;
+- a redirect to a URL with a `#fragment` stays a redirect instead of becoming a 409.
 
 ## SSR (`ssr.rs`)
 
