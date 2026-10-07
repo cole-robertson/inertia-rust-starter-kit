@@ -27,6 +27,25 @@ into the kit's own Inertia layer:
   (high severity; `sharp` comes in through `wrangler`, `miniflare` and `cf`, whose own releases
   still pin 0.35.4). Remove the override once they move.
 
+From building an app on the kit (Radar):
+
+- **`tests/entities_fresh.rs`** checks the committed `src/models/_entities/` against what
+  `db migrate` + `db entities` write in a temp copy (well under a second once built), as
+  `routes_fresh`/`types_fresh` do for their files; `bin/ci` runs it before the slow steps, and
+  CI's "Generated routes are fresh" job too. An edited migration (a unique index) no longer
+  waits for the generator test to show its stale entities. `generate migration` prints the
+  `db migrate && db entities` it needs.
+- **`tokens::sign` / `tokens::verify_signed`**: signed, expiring tokens for any data and purpose
+  (a one-click link for a record), on the same derived-key HMAC as the user tokens, whose format
+  is unchanged.
+- **Non-ASCII mail subjects** (RFC 2047 encoded words, folded) are decoded by `e2e/mail.ts`'s
+  `lastMailTo` and the request tests' `decode_qp`.
+- **`getByTestId` reads `data-test`** (`testIdAttribute` in `playwright.config.ts`), the one
+  test-id attribute the pages use.
+- `tests/rename.rs` passes in an app that deleted `site/`, and `bin/rename` says to delete
+  `.github/workflows/site.yml` with it. Recipes: Loco's cron is UTC (a local-hour job),
+  app-set scaffold columns, `show:<any name>` is a String param.
+
 ## 0.2.0 - 2026-10-06
 
 - **Typed page props.** A page's props are a Rust struct deriving `Serialize` and `ts_rs::TS`,
