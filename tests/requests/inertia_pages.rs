@@ -238,6 +238,47 @@ async fn pages_report_how_long_the_app_spent_in_server_timing() {
 
 #[tokio::test]
 #[serial]
+async fn pages_are_compressed_when_loco_compression_is_on() {
+    // Production turns Loco's compression middleware on (`COMPRESSION`, default true); it sits
+    // inside the app's own layers, so a page must be rendered by the time it sees the response.
+    let compress = |config: &mut loco_rs::config::Config| {
+        config.server.middlewares.compression =
+            Some(loco_rs::controller::middleware::compression::Compression { enable: true });
+    };
+    with_app_config(compress, |server, ctx| async move {
+        for res in [
+            server
+                .get(route_table::SIGN_IN)
+                .add_header("accept-encoding", "gzip")
+                .await,
+            server
+                .get(route_table::SIGN_IN)
+                .add_header("accept-encoding", "gzip")
+                .add_header("x-inertia", "true")
+                .add_header("x-inertia-version", asset_version(&ctx))
+                .await,
+        ] {
+            assert_eq!(res.status_code(), 200);
+            assert_eq!(res.header("content-encoding"), "gzip");
+            let vary: Vec<String> = res
+                .headers()
+                .get_all("vary")
+                .iter()
+                .map(|v| v.to_str().unwrap().to_ascii_lowercase())
+                .collect();
+            let vary = vary.join(", ");
+            assert!(
+                vary.contains("x-inertia") && vary.contains("accept-encoding"),
+                "{vary}"
+            );
+            assert!(!res.as_bytes().is_empty(), "a compressed page has a body");
+        }
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
 async fn error_pages_are_readable_when_loco_compression_is_on() {
     // The exceptions layer replaces a handler's (already compressed) 404 body with the public
     // page; the response must not still claim the old body's Content-Encoding, or browsers

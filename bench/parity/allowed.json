@@ -25,7 +25,7 @@
   },
   {
     "match": "^headers: .* :: ?\\.headers\\.vary$",
-    "reason": "`accept-encoding` is added by the app's own compression layer (the Rails image compresses in Thruster, in front of Rails, so the app's responses don't vary)."
+    "reason": "`accept-encoding` is added by the app's own compression layer (the Rails image compresses in Thruster, in front of Rails, so the app's responses don't vary). `X-Inertia` is on every response, redirects, 404s and public files included: inertia-omega adds it to everything its layer sees, as inertia-laravel does; inertia-rails only on Inertia renders."
   },
   {
     "match": "^headers: (404|public file) :: ?\\.headers\\.(x-content-type-options|referrer-policy|x-xss-protection|x-permitted-cross-domain-policies)$",
@@ -70,5 +70,9 @@
   {
     "match": "^GET /icon\\.(png|svg) :: ?\\.bytes$",
     "reason": "Branding: the kit's own favicon (an orange gear with two purple motion bars on a dark tile, the 16 px-safe version of frontend/components/app-logo-icon.tsx) instead of the Rails kit's red circle. Same paths, types and caching."
+  },
+  {
+    "match": "^(GET|POST|PATCH|PUT|DELETE|HEAD) .* :: ?\\.page\\.clearHistory$",
+    "reason": "inertia-omega (like inertia-laravel) sends `clearHistory` only when true; inertia-rails always sends it, `false` included. The client only acts on a true value (`if (page.clearHistory)`), and sign-out/delete still send `true` (compared by the oracle: their value matches)."
   }
 ]

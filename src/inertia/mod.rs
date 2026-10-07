@@ -1,4 +1,5 @@
-//! Inertia.js v3 server adapter. See docs/INERTIA_CONTRACT.md and docs/INERTIA.md.
+//! Inertia.js v3 for the kit: inertia-omega (the protocol: props, page object, render,
+//! versioning, redirect rules) plus the kit's own layers around it. See docs/INERTIA.md.
 
 pub mod config;
 pub mod cookies;
@@ -8,24 +9,21 @@ pub mod exceptions;
 pub mod flash;
 pub mod headers;
 pub mod meta;
-pub mod page;
 pub mod precognition;
 pub mod props;
 pub mod public;
 pub mod redirect;
 pub mod render;
 pub mod request_log;
-pub mod resolver;
 pub mod ssr;
 pub mod timing;
-pub mod version;
 pub mod vite;
 
 pub use config::Settings;
 pub use meta::{InertiaMeta, MetaTag, MetaTitleTemplate};
 pub use props::{
-    always, deep_merge, defer, lazy, lazy_prop, merge, once, optional, scroll, Prop, Props,
-    ScrollMetadata, SharedProps, SharedPropsFn,
+    always, deep_merge, defer, lazy, merge, once, optional, scroll, scroll_with, Paginator, Prop,
+    Props, ScrollMetadata, SharedProps, SharedPropsFn,
 };
 pub use render::Inertia;
 

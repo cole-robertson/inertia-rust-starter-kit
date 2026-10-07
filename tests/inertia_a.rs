@@ -19,9 +19,9 @@ use axum::{
 use inertia_rust_starter_kit::inertia::{
     self,
     config::Settings,
-    flash::{FlashConsumed, FlashState, IncomingFlash},
+    flash::{self, FlashState},
     headers::CspNonce,
-    lazy, optional, Inertia, Prop, Props, ScrollMetadata, SharedProps, SharedPropsFn,
+    lazy, optional, render, Inertia, Paginator, Prop, Props, SharedProps, SharedPropsFn,
 };
 use loco_rs::app::AppContext;
 use serde_json::{json, Value};
@@ -74,51 +74,50 @@ struct Calls(Arc<AtomicUsize>);
 
 async fn feed(Extension(calls): Extension<Calls>, inertia: Inertia) -> loco_rs::Result<Response> {
     let props = Props::new()
-        .prop("title", "Feed")
-        .prop(
+        .with("title", "Feed")
+        .with(
             "user",
             json!({"id": 1, "name": "Ada", "email": "ada@example.com"}),
         )
-        .prop(
+        .with(
             "expensive",
             lazy(move || async move {
                 calls.0.fetch_add(1, Ordering::SeqCst);
                 Ok(42)
             }),
         )
-        .prop("filters", optional(|| async { Ok(json!(["a"])) }))
-        .prop("comments", inertia::defer(|| async { Ok(json!([1, 2])) }))
-        .prop(
+        .with("filters", optional(|| async { Ok(json!(["a"])) }))
+        .with("comments", inertia::defer(|| async { Ok(json!([1, 2])) }))
+        .with(
             "stats",
             inertia::defer(|| async { Ok(json!({"n": 1})) }).group("sidebar"),
         )
-        .prop(
+        .with(
             "posts",
-            inertia::merge(|| async { Ok(json!([{"id": 1}])) }).match_on("id"),
+            lazy(|| async { Ok(json!([{"id": 1}])) }).match_on("id"),
         )
-        .prop("feed", Prop::value(json!({"data": [1]})).append_at("data"))
-        .prop(
+        .with("feed", Prop::value(json!({"data": [1]})).append_at("data"))
+        .with(
             "tree",
-            inertia::deep_merge(|| async { Ok(json!({"a": {"b": 1}})) }),
+            lazy(|| async { Ok(json!({"a": {"b": 1}})) }).deep_merge(),
         )
-        .prop("recent", Prop::value(json!([3])).prepend())
-        .prop(
+        .with("recent", Prop::value(json!([3])).prepend())
+        .with(
             "plans",
-            inertia::once(|| async { Ok(json!(["free", "pro"])) }).expires_at(1_900_000_000_000),
+            inertia::once(|| async { Ok(json!(["free", "pro"])) })
+                .until(std::time::Duration::from_secs(3600)),
         )
-        .prop(
+        .with(
             "countries",
-            Prop::value(json!(["NZ"])).once_key("countries-v1"),
+            Prop::value(json!(["NZ"])).once_as("countries-v1"),
         )
-        .prop(
+        .with(
             "users",
-            inertia::scroll(ScrollMetadata::new("page", None, Some(2), 1), || async {
-                Ok(json!({"data": [{"id": 1}]}))
-            })
-            .wrapper("data"),
+            // Page 1 of 2, one item per page.
+            inertia::scroll(Paginator::new(vec![json!({"id": 1})], 2, 1, 1)),
         )
-        .prop("nested.deep.value", "x")
-        .prop("xss", "</script><script>alert(1)</script>\u{2028}");
+        .with("nested.deep.value", "x")
+        .with("xss", "</script><script>alert(1)</script>\u{2028}");
     inertia.render("Feed/Index", props).await
 }
 
@@ -126,7 +125,7 @@ async fn plain(inertia: Inertia) -> loco_rs::Result<Response> {
     inertia
         .render(
             "Plain",
-            Props::new().prop("auth", json!({"override": true})),
+            Props::new().with("auth", json!({"override": true})),
         )
         .await
 }
@@ -135,8 +134,8 @@ fn shared_props() -> SharedProps {
     let f: SharedPropsFn = Arc::new(|_parts, _ctx| {
         Box::pin(async {
             Ok(Props::new()
-                .prop("auth", json!({"user": null}))
-                .prop("app.name", "Kit"))
+                .with("auth", json!({"user": null}))
+                .with("app.name", "Kit"))
         })
     });
     SharedProps(f)
@@ -155,22 +154,33 @@ async fn app_counting(settings: Arc<Settings>, calls: Calls) -> Router {
         .route("/api", get(|| async { Json(json!({"ok": true})) }))
         .layer(Extension(calls))
         .with_state(ctx);
-    let router = inertia::version::layer(router, settings);
-    // Stand-ins for agent B's layers: a nonce and an incoming flash.
+    layers(router, settings)
+}
+
+/// The app's Inertia and flash layers around `router`, with a stand-in for the headers layer
+/// (a fixed nonce). A request with `x-test-flash: errors` renders as if it was redirected to
+/// with a notice, errors and both history flags (queued in the request itself, which omega
+/// delivers to its render; the cookie round trip is tests/inertia_b.rs').
+fn layers(router: Router, settings: Arc<Settings>) -> Router {
+    let router = router.layer(middleware::from_fn(|req: Request, next: Next| async move {
+        if req.headers().get("x-test-flash").is_some() {
+            let handle = req.extensions().get::<omega::Inertia>().unwrap();
+            FlashState {
+                notice: Some("Saved".into()),
+                errors: Some(json!({"email": ["is invalid"]})),
+                clear_history: true,
+                preserve_fragment: true,
+                ..FlashState::default()
+            }
+            .queue(handle);
+        }
+        next.run(req).await
+    }));
+    let router = render::layer(router, settings.clone());
+    let router = flash::layer(router, settings);
     router.layer(middleware::from_fn(
         |mut req: Request, next: Next| async move {
             req.extensions_mut().insert(CspNonce("test-nonce".into()));
-            let flash = match req.headers().get("x-test-flash").map(|v| v.as_bytes()) {
-                Some(b"errors") => FlashState {
-                    notice: Some("Saved".into()),
-                    errors: Some(json!({"email": ["is invalid"]})),
-                    clear_history: true,
-                    preserve_fragment: true,
-                    ..FlashState::default()
-                },
-                _ => FlashState::default(),
-            };
-            req.extensions_mut().insert(IncomingFlash(Arc::new(flash)));
             next.run(req).await
         },
     ))
@@ -209,14 +219,13 @@ async fn inertia_visit_returns_json_page_with_metadata() {
         .to_str()
         .unwrap()
         .starts_with("application/json"));
-    assert!(res.extensions().get::<FlashConsumed>().is_some());
     let page = json_page(res).await;
 
     assert_eq!(page["component"], "Feed/Index");
     assert_eq!(page["url"], "/feed?page=1");
     assert_eq!(page["version"], version());
     assert_eq!(page["encryptHistory"], true);
-    assert_eq!(page["clearHistory"], false);
+    assert!(page.get("clearHistory").is_none(), "omitted unless true");
     assert!(page.get("flash").is_none());
     assert!(page.get("preserveFragment").is_none());
     // Like inertia_shared_data: the errors hash is shared, and listed first.
@@ -246,10 +255,16 @@ async fn inertia_visit_returns_json_page_with_metadata() {
     assert_eq!(page["prependProps"], json!(["recent"]));
     assert_eq!(page["deepMergeProps"], json!(["tree"]));
     assert_eq!(page["matchPropsOn"], json!(["posts.id"]));
+    let expires_at = page["onceProps"]["plans"]["expiresAt"].as_u64().unwrap();
+    let in_an_hour = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+        + 3_600_000;
+    assert!(expires_at.abs_diff(in_an_hour) < 5_000, "{expires_at}");
     assert_eq!(
-        page["onceProps"],
-        json!({"plans": {"prop": "plans", "expiresAt": 1_900_000_000_000_i64},
-               "countries-v1": {"prop": "countries"}})
+        page["onceProps"]["countries-v1"],
+        json!({"prop": "countries", "expiresAt": null})
     );
     assert_eq!(
         page["scrollProps"],
@@ -462,10 +477,7 @@ async fn stale_version_on_inertia_get_is_409_with_full_location() {
         res.headers()["x-inertia-location"],
         "https://app.example.com/feed?page=2"
     );
-    assert!(
-        res.extensions().get::<FlashConsumed>().is_none(),
-        "flash is kept on 409"
-    );
+    assert_eq!(res.headers()["x-inertia-version"], version());
 
     // A tab on an extra host reloads on that host; any other Host gets app_url.
     let mut extra = (*settings("version-extra", None)).clone();
@@ -567,6 +579,80 @@ async fn shared_props_list_errors_even_when_the_page_overrides_them() {
     assert_eq!(page["props"]["errors"], json!({"email": ["is invalid"]}));
 }
 
+// ---------------------------------------------------------------- failing props
+
+/// A page whose lazy props fail: `?fail=missing` with `NotFound`, `?fail=broken` with any other
+/// error; `?fail=rescued` fails a rescued deferred prop.
+async fn failing(
+    inertia: Inertia,
+    axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> loco_rs::Result<Response> {
+    let fail = q.get("fail").cloned().unwrap_or_default();
+    let props = Props::new()
+        .with("title", "Failing")
+        .with(
+            "record",
+            lazy(move || async move {
+                match fail.as_str() {
+                    "missing" => Err(loco_rs::Error::NotFound),
+                    "broken" => Err(loco_rs::Error::string("database is on fire")),
+                    _ => Ok(json!({"id": 1})),
+                }
+            }),
+        )
+        .with(
+            "stats",
+            inertia::defer(|| async { Err::<Value, _>(loco_rs::Error::string("stats down")) })
+                .rescue(),
+        );
+    inertia.render("Failing", props).await
+}
+
+async fn failing_app() -> Router {
+    let settings = settings("failing", None);
+    let ctx = ctx_with(settings.clone()).await;
+    let router = Router::new()
+        .route("/failing", get(failing))
+        .with_state(ctx);
+    layers(router, settings)
+}
+
+#[tokio::test]
+async fn a_lazy_prop_that_is_not_found_is_a_404_and_any_other_failure_a_500() {
+    let router = failing_app().await;
+
+    let res = send(&router, inertia_get("/failing?fail=missing")).await;
+    assert_eq!(
+        res.status(),
+        StatusCode::NOT_FOUND,
+        "NotFound, as from the handler"
+    );
+    let res = send(&router, inertia_get("/failing?fail=broken")).await;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let res = send(&router, Request::get("/failing?fail=missing")).await;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND, "the HTML visit too");
+
+    let res = send(&router, inertia_get("/failing")).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(json_page(res).await["props"]["record"], json!({"id": 1}));
+}
+
+#[tokio::test]
+async fn a_rescued_deferred_prop_that_fails_is_listed_and_the_page_still_renders() {
+    let router = failing_app().await;
+    let res = send(
+        &router,
+        inertia_get("/failing")
+            .header("x-inertia-partial-component", "Failing")
+            .header("x-inertia-partial-data", "stats"),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let page = json_page(res).await;
+    assert!(page["props"].get("stats").is_none());
+    assert_eq!(page["rescuedProps"], json!(["stats"]));
+}
+
 // ---------------------------------------------------------------- #21 server head
 
 async fn meta_page(inertia: Inertia) -> loco_rs::Result<Response> {
@@ -578,13 +664,13 @@ async fn meta_page(inertia: Inertia) -> loco_rs::Result<Response> {
                     .attr("content", "Hi <there>"),
             ),
         )
-        .render("Meta", Props::new().prop("x", 1i64))
+        .render("Meta", Props::new().with("x", 1i64))
         .await
 }
 
 async fn reserved_head(inertia: Inertia) -> loco_rs::Result<Response> {
     inertia
-        .render("Meta", Props::new().prop("head", "mine"))
+        .render("Meta", Props::new().with("head", "mine"))
         .await
 }
 
@@ -595,10 +681,11 @@ async fn meta_app(settings: Arc<Settings>, template: bool) -> Router {
             Arc::new(|title| title.map(|t| format!("{t} | Kit")));
         ctx.shared_store.insert(inertia::MetaTitleTemplate(t));
     }
-    Router::new()
+    let router = Router::new()
         .route("/meta", get(meta_page))
         .route("/reserved", get(reserved_head))
-        .with_state(ctx)
+        .with_state(ctx);
+    layers(router, settings)
 }
 
 fn with_server_head(value: Value) -> Arc<Settings> {
@@ -652,6 +739,7 @@ async fn server_head_sends_html_strings_with_data_inertia_and_reserves_the_prop(
         .oneshot(
             Request::get("/reserved")
                 .header("x-inertia", "true")
+                .header("x-inertia-version", version())
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -775,7 +863,7 @@ async fn home_page(inertia: Inertia) -> loco_rs::Result<Response> {
         )
         .render(
             "home/index",
-            Props::new().prop("auth", json!({"user": null})),
+            Props::new().with("auth", json!({"user": null})),
         )
         .await
 }
@@ -791,8 +879,12 @@ async fn server_head_tags_come_back_from_the_real_ssr_bundle_exactly_once() {
     let mut s = (*settings("meta-real-ssr", Some(&url))).clone();
     s.server_head = serde_json::from_value(json!(true)).unwrap();
     s.ssr.timeout_ms = 5000;
-    let ctx = ctx_with(Arc::new(s)).await;
-    let router: Router = Router::new().route("/", get(home_page)).with_state(ctx);
+    let settings = Arc::new(s);
+    let ctx = ctx_with(settings.clone()).await;
+    let router = layers(
+        Router::new().route("/", get(home_page)).with_state(ctx),
+        settings,
+    );
     let html = body(send(&router, Request::get("/")).await).await;
     let _ = child.kill().await;
     let _ = std::fs::remove_dir_all(bundle.parent().unwrap());
@@ -860,7 +952,7 @@ async fn request_logs_and_ssr_errors_never_contain_the_reset_sid() {
     let settings = settings("logs", Some(&url));
 
     // The app's real middleware stack (Loco's defaults with our logger).
-    let ctx = ctx_with(settings).await;
+    let ctx = ctx_with(settings.clone()).await;
     ctx.shared_store.insert(shared_props());
     let mut router: axum::Router<AppContext> = Router::new().route("/plain", get(plain));
     let stack = inertia::middlewares(&ctx);
@@ -872,7 +964,7 @@ async fn request_logs_and_ssr_errors_never_contain_the_reset_sid() {
     for m in stack.iter().filter(|m| m.is_enabled()) {
         router = m.apply(router).unwrap();
     }
-    let router = router.with_state(ctx);
+    let router = layers(router.with_state(ctx), settings);
 
     let logs = LogBuf::default();
     let subscriber = tracing_subscriber::fmt()

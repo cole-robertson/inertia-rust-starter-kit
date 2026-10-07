@@ -2320,6 +2320,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2329,6 +2331,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79cf5c93f93228cf8efb3ba362535fb11199ac548a09ce117c9b1adc3030d706"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "inertia-omega"
+version = "0.1.0"
+source = "git+https://github.com/cole-robertson/inertia-omega?rev=06754a74f1887a7df1cb4dc0c702597cb61a98ed#06754a74f1887a7df1cb4dc0c702597cb61a98ed"
+dependencies = [
+ "axum",
+ "futures-util",
+ "http",
+ "http-body",
+ "indexmap",
+ "serde",
+ "serde_json",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -2348,6 +2367,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "include_dir",
+ "inertia-omega",
  "libsqlite3-sys",
  "loco-gen",
  "loco-rs",

@@ -363,7 +363,7 @@ async fn account_switcher(
         digest.update(format!("{}:{};", a.id, a.updated_at.to_rfc3339()));
     }
     let key = format!("accounts:{}", &hex::encode(digest.finalize())[..16]);
-    Ok(crate::inertia::props::Prop::serialize(&list)?.once_key(key))
+    Ok(crate::inertia::Prop::value(list).once_as(key))
 }
 
 /// Register the shared props (the Rails kit's `inertia_share`): `auth`, and for a signed-in
@@ -374,11 +374,10 @@ pub fn register_shared_props(ctx: &AppContext) {
         let auth = auth_prop(current.as_ref());
         let db = ctx.db.clone();
         Box::pin(async move {
-            let props = crate::inertia::props::Props::new()
-                .prop("auth", crate::inertia::Prop::serialize(&auth)?);
+            let props = crate::inertia::Props::new().with("auth", auth);
             Ok(match current {
                 Some(current) => {
-                    props.prop("accounts", account_switcher(&db, current.user.id).await?)
+                    props.with("accounts", account_switcher(&db, current.user.id).await?)
                 }
                 None => props,
             })

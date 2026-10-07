@@ -1,37 +1,25 @@
-//! Redirects for Inertia: the `Redirect` builder (flash-carrying 302s),
-//! `location()` (Inertia external visits), and the middleware that applies
-//! the protocol's redirect rules to every response:
+//! Redirects for Inertia: the `Redirect` builder (flash-carrying 302s), and inertia-rails'
+//! `convert_external_redirects`, which the Inertia layer (`render::layer`) applies to every
+//! Inertia visit: one redirected (301/302/303) to another origin becomes 409 +
+//! `X-Inertia-Location`. XHR can't follow cross-origin redirects, so the client does a full
+//! `window.location` visit instead. Headers (notably Set-Cookie) are kept; the body is dropped.
 //!
-//! - Inertia PUT/PATCH/DELETE answered with 301/302 becomes 303, so the
-//!   browser follows with GET.
-//! - Inertia request redirected (301/302/303) to another origin becomes
-//!   409 + `X-Inertia-Location`: XHR can't follow cross-origin redirects, the
-//!   client does a full `window.location` visit instead. Headers (notably
-//!   Set-Cookie) are kept; the body is dropped.
-//! - Inertia request redirected (201/301/302/303/307/308) to a URL with a
-//!   `#fragment` becomes 409 + `X-Inertia-Redirect`: fetch drops the
-//!   fragment when it follows a redirect, so the client visits the URL
-//!   itself. Not for prefetches (inertia-laravel's Middleware).
-
-use std::sync::Arc;
+//! inertia-omega applies the rest of the protocol's redirect rules: a 302 after an Inertia
+//! PUT/PATCH/DELETE becomes 303, and a redirect to a URL with a `#fragment` becomes 409 +
+//! `X-Inertia-Redirect` (not for prefetches, see [`is_prefetch`]).
 
 use axum::{
     body::Body,
-    extract::{Request, State},
-    http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
-    middleware::Next,
+    http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    Router,
 };
 use serde::Serialize;
 use url::Url;
 
-use super::config::Settings;
 use super::flash::{FlashState, OutgoingFlash};
 
 pub const X_INERTIA: HeaderName = HeaderName::from_static("x-inertia");
 pub const X_INERTIA_LOCATION: HeaderName = HeaderName::from_static("x-inertia-location");
-pub const X_INERTIA_REDIRECT: HeaderName = HeaderName::from_static("x-inertia-redirect");
 
 pub fn is_inertia(headers: &HeaderMap) -> bool {
     headers.get(X_INERTIA).is_some_and(|v| v == "true")
@@ -155,90 +143,32 @@ impl IntoResponse for Redirect {
     }
 }
 
-/// `inertia_location`: 409 + `X-Inertia-Location` for Inertia requests
-/// (the client does a full visit), a plain 302 otherwise.
-pub fn location(headers: &HeaderMap, url: &str) -> Response {
-    let Ok(value) = HeaderValue::from_str(url) else {
-        tracing::error!(url, "location target is not a valid header value");
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    };
-    let (status, name) = if is_inertia(headers) {
-        (StatusCode::CONFLICT, X_INERTIA_LOCATION)
-    } else {
-        (StatusCode::FOUND, header::LOCATION)
-    };
-    let mut res = status.into_response();
-    res.headers_mut().insert(name, value);
-    res
-}
-
-pub fn layer(router: Router, settings: Arc<Settings>) -> Router {
-    router.layer(axum::middleware::from_fn_with_state(settings, middleware))
-}
-
-async fn middleware(State(settings): State<Arc<Settings>>, req: Request, next: Next) -> Response {
-    if !is_inertia(req.headers()) {
-        return next.run(req).await;
+/// An Inertia visit's response, with a redirect (301/302/303) to another origin turned into
+/// 409 + `X-Inertia-Location`; any other response as it was. `request_host` is the request's
+/// `Host` header.
+#[must_use]
+pub fn convert_external(res: Response, app_url: &str, request_host: Option<&str>) -> Response {
+    if !matches!(res.status().as_u16(), 301..=303) {
+        return res;
     }
-    let method = req.method().clone();
-    let prefetch = is_prefetch(req.headers());
-    let host = req
+    let external = res
         .headers()
-        .get(header::HOST)
+        .get(header::LOCATION)
         .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
-    let mut res = next.run(req).await;
-    let status = res.status().as_u16();
-
-    if matches!(status, 301..=303) {
-        let location = res
-            .headers()
-            .get(header::LOCATION)
-            .and_then(|v| v.to_str().ok());
-        if let Some(location) = location {
-            if is_external(location, &settings.app_url, host.as_deref()) {
-                let value = res
-                    .headers_mut()
-                    .remove(header::LOCATION)
-                    .expect("checked above");
-                let (mut parts, _body) = res.into_parts();
-                parts.status = StatusCode::CONFLICT;
-                parts.headers.insert(X_INERTIA_LOCATION, value);
-                parts.headers.remove(header::CONTENT_TYPE);
-                parts.headers.remove(header::CONTENT_LENGTH);
-                return Response::from_parts(parts, Body::empty());
-            }
-        }
+        .is_some_and(|location| is_external(location, app_url, request_host));
+    if !external {
+        return res;
     }
-
-    if matches!(status, 301 | 302) && matches!(method, Method::PUT | Method::PATCH | Method::DELETE)
-    {
-        *res.status_mut() = StatusCode::SEE_OTHER;
-    }
-
-    // inertia-laravel Middleware#handle: `$isRedirect && redirectHasFragment
-    // && ! $request->prefetch()` → onRedirectWithFragment (409 +
-    // X-Inertia-Redirect). Kept: other headers and the response extensions
-    // (so the flash layer still writes an outgoing flash).
-    if matches!(status, 201 | 301 | 302 | 303 | 307 | 308) && !prefetch {
-        let fragment = res
-            .headers()
-            .get(header::LOCATION)
-            .is_some_and(|v| v.as_bytes().contains(&b'#'));
-        if fragment {
-            let value = res
-                .headers_mut()
-                .remove(header::LOCATION)
-                .expect("checked above");
-            let (mut parts, _body) = res.into_parts();
-            parts.status = StatusCode::CONFLICT;
-            parts.headers.insert(X_INERTIA_REDIRECT, value);
-            parts.headers.remove(header::CONTENT_TYPE);
-            parts.headers.remove(header::CONTENT_LENGTH);
-            return Response::from_parts(parts, Body::empty());
-        }
-    }
-    res
+    let (mut parts, _body) = res.into_parts();
+    let location = parts
+        .headers
+        .remove(header::LOCATION)
+        .expect("checked above");
+    parts.status = StatusCode::CONFLICT;
+    parts.headers.insert(X_INERTIA_LOCATION, location);
+    parts.headers.remove(header::CONTENT_TYPE);
+    parts.headers.remove(header::CONTENT_LENGTH);
+    Response::from_parts(parts, Body::empty())
 }
 
 /// A path-absolute reference a browser resolves on this origin: starts with
