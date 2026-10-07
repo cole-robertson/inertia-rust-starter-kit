@@ -217,9 +217,12 @@ impl Resolver<'_> {
                 }
             }
 
-            self.apply_scroll_intent(&mut prop);
+            let kept = self.keep(&prop, &path, parent_resolved);
+            if kept {
+                self.apply_scroll_intent(&mut prop);
+            }
             self.collect_metadata(&prop, &path, meta);
-            if !self.keep(&prop, &path, parent_resolved) {
+            if !kept {
                 return Ok(None);
             }
 
@@ -269,9 +272,12 @@ impl Resolver<'_> {
                 Source::Lazy(f) => {
                     let mut value = f().await?;
                     if closure && value.is_modified() {
-                        self.apply_scroll_intent(&mut value);
+                        let kept = self.keep(&value, path, parent_resolved);
+                        if kept {
+                            self.apply_scroll_intent(&mut value);
+                        }
                         self.collect_metadata(&value, path, meta);
-                        if !self.keep(&value, path, parent_resolved) {
+                        if !kept {
                             return Ok(None);
                         }
                     }
@@ -366,7 +372,10 @@ impl Resolver<'_> {
     }
 
     /// A scroll prop appends (or prepends, per the client's intent) at its
-    /// wrapper key, or at the root without one.
+    /// wrapper key, or at the root without one. Only for a prop that is being
+    /// resolved (Laravel's `resolveValue` → `configureMergeIntent`, omega's
+    /// resolver): an excluded scroll prop, such as a deferred one on the
+    /// first visit, keeps the plain root merge `Prop::scroll` gave it.
     fn apply_scroll_intent(&self, prop: &mut Prop) {
         let Some(scroll) = prop.scroll.as_ref() else {
             return;
@@ -542,7 +551,7 @@ mod tests {
 
     use super::*;
     use crate::inertia::props::{
-        defer, lazy, lazy_prop, merge, once, optional, Prop, ScrollMetadata,
+        defer, lazy, lazy_prop, merge, once, optional, scroll, Prop, ScrollMetadata,
     };
 
     fn partial(only: &[&str], except: &[&str]) -> Visit {
@@ -710,6 +719,47 @@ mod tests {
             .prop("second", fail(100, "second").rescue());
         let (_, m) = run(props, &Visit::default()).await;
         assert_eq!(m, json!({"rescuedProps": ["first", "second"]}));
+    }
+
+    #[tokio::test]
+    async fn deferred_scroll_prop_merges_at_the_wrapper_only_once_resolved() {
+        // The merge intent applies only to a prop being resolved (Laravel's
+        // resolveValue → configureMergeIntent, omega, Rails' ScrollProp#call):
+        // an excluded deferred scroll prop merges at its root, and the reload
+        // that loads it at the wrapper, as in Laravel and omega. (Rails
+        // collects metadata before #call, so it reports the root path on
+        // that reload too.)
+        let users = || {
+            scroll(ScrollMetadata::new("page", None, Some(2), 1), || async {
+                Ok(json!({"data": [{"id": 1}]}))
+            })
+            .wrapper("data")
+            .defer()
+        };
+        let (p, m) = run(Props::new().prop("users", users()), &Visit::default()).await;
+        assert_eq!(p, json!({}));
+        assert_eq!(
+            m,
+            json!({"deferredProps": {"default": ["users"]}, "mergeProps": ["users"]})
+        );
+
+        let (p, m) = run(
+            Props::new().prop("users", users()),
+            &partial(&["users"], &[]),
+        )
+        .await;
+        assert_eq!(p, json!({"users": {"data": [{"id": 1}]}}));
+        assert_eq!(m["mergeProps"], json!(["users.data"]));
+        assert_eq!(m["scrollProps"]["users"]["nextPage"], json!(2));
+        assert!(m.get("deferredProps").is_none());
+
+        let visit = Visit {
+            scroll_intent: Some("prepend".into()),
+            ..partial(&["users"], &[])
+        };
+        let (_, m) = run(Props::new().prop("users", users()), &visit).await;
+        assert_eq!(m["prependProps"], json!(["users.data"]));
+        assert!(m.get("mergeProps").is_none());
     }
 
     #[tokio::test]

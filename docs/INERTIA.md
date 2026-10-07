@@ -51,12 +51,14 @@ The page object contains:
 | `merge(..)` / `.merge()` / `.prepend()` / `.append_at(p)` / `.prepend_at(p)` / `.match_on(f)` | `InertiaRails.merge` | `mergeProps` / `prependProps` / `matchPropsOn` | same (unless in `X-Inertia-Reset`) |
 | `deep_merge(..)` / `.deep_merge()` | `InertiaRails.deep_merge` | `deepMergeProps` | same |
 | `once(..)` / `.once()` / `.once_key(k)` / `.expires_at(ms)` / `.expires_in(d)` / `.fresh()` | `InertiaRails.once` | `onceProps`; skipped if in `X-Inertia-Except-Once-Props` | sent anyway when explicitly requested |
-| `scroll(ScrollMetadata, ..)` / `.wrapper("data")` | `InertiaRails.scroll` | `scrollProps` + merge at the wrapper | `X-Inertia-Infinite-Scroll-Merge-Intent: prepend` prepends; `X-Inertia-Reset` sets `reset: true` |
+| `scroll(ScrollMetadata, ..)` / `.wrapper("data")` | `InertiaRails.scroll` | `scrollProps` + merge at the wrapper (a deferred one: `mergeProps: ["users"]` until loaded, see below) | `X-Inertia-Infinite-Scroll-Merge-Intent: prepend` prepends; `X-Inertia-Reset` sets `reset: true` |
 | `.rescue()` | `rescue: true` | a failure is logged and listed in `rescuedProps` instead of failing the render | same |
 
 A lazy closure is `FnOnce() -> impl Future<Output = Result<impl Serialize>>`. It runs at most once, and only when the prop is kept.
 
 **Kept lazy props run concurrently**, siblings and nested levels alike (an idea from inertia-omega's resolver; inertia-rails and inertia-laravel run them one by one). Three 100 ms props cost about 100 ms, not 300 ms. The page is still built in prop order: the keys of `props` and every metadata list (`deferredProps`, `mergeProps`, `onceProps`, `rescuedProps`, ...) come out exactly as a sequential pass would produce them. When several props fail, the error is the first failing one in prop order. Because they are polled together on one task, closures that share a resource still contend for it: in the kit's default test config (`max_connections: 1`) two database-backed props simply take turns on the one connection.
+
+A scroll prop's merge intent is applied when the prop is resolved, as in inertia-laravel (`resolveValue` → `configureMergeIntent`) and inertia-omega. So a **deferred** scroll prop with `.wrapper("data")` reports `mergeProps: ["users"]` on the first visit, where it is only listed, and `mergeProps: ["users.data"]` (or `prependProps`) on the partial reload that loads it. (inertia-rails collects the metadata before `ScrollProp#call`, so it reports `users` on every visit, a non-deferred scroll prop's first visit and that reload included.)
 
 ### Closures returning props, arrays of props
 

@@ -385,8 +385,12 @@ impl Prop {
     }
 
     /// Make this an infinite-scroll prop with the given pagination metadata.
+    /// It merges at the root (`ScrollProp`'s `@merge = true`) until it is
+    /// resolved, when the client's merge intent moves the merge to the
+    /// wrapper key.
     #[must_use]
     pub fn scroll(mut self, metadata: ScrollMetadata) -> Self {
+        self.merge_spec();
         self.scroll = Some(ScrollSpec {
             metadata,
             wrapper: None,
