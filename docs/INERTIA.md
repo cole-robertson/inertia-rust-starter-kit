@@ -56,6 +56,8 @@ The page object contains:
 
 A lazy closure is `FnOnce() -> impl Future<Output = Result<impl Serialize>>`. It runs at most once, and only when the prop is kept.
 
+**Kept lazy props run concurrently**, siblings and nested levels alike (an idea from inertia-omega's resolver; inertia-rails and inertia-laravel run them one by one). Three 100 ms props cost about 100 ms, not 300 ms. The page is still built in prop order: the keys of `props` and every metadata list (`deferredProps`, `mergeProps`, `onceProps`, `rescuedProps`, ...) come out exactly as a sequential pass would produce them. When several props fail, the error is the first failing one in prop order. Because they are polled together on one task, closures that share a resource still contend for it: in the kit's default test config (`max_connections: 1`) two database-backed props simply take turns on the one connection.
+
 ### Closures returning props, arrays of props
 
 These cover the reference resolver's recursive cases (`props_resolver.rb#deep_transform_props` / `transform_array`):

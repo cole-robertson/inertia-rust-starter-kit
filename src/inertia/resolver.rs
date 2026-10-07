@@ -1,7 +1,9 @@
 //! Partial-reload filtering and page metadata (port of inertia-rails'
-//! props_resolver.rb). Lazy props are evaluated only when kept.
+//! props_resolver.rb). Lazy props are evaluated only when kept, and kept
+//! ones run concurrently (see [`resolve`]).
 
 use axum::http::HeaderMap;
+use futures_util::future::join_all;
 use loco_rs::Result;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -87,21 +89,47 @@ pub struct Metadata {
 
 /// Resolves `props` for `visit`: `(props object, metadata)`.
 ///
+/// Kept lazy props run concurrently, siblings and nested levels alike (as
+/// inertia-omega's resolver does; Rails and Laravel run them one by one).
+/// The props object and every metadata list still come out in prop order,
+/// exactly as one sequential pass would produce them.
+///
 /// # Errors
-/// The first lazy prop that fails (unless it was marked `rescue`).
+/// The first lazy prop, in prop order, that fails (unless it was marked
+/// `rescue`). Its kept siblings still run to completion.
 pub async fn resolve(props: Props, visit: &Visit) -> Result<(Map<String, Value>, Metadata)> {
-    let mut r = Resolver {
-        visit,
-        meta: Metadata::default(),
-    };
+    let r = Resolver { visit };
+    let mut meta = Metadata::default();
     let props = props.expand_dot_notation().await?;
-    let resolved = r.transform(props, String::new(), false).await?;
-    Ok((resolved, r.meta))
+    let resolved = r.transform(props, String::new(), false, &mut meta).await?;
+    Ok((resolved, meta))
+}
+
+impl Metadata {
+    /// Appends `other`, collected for props that come after this metadata's:
+    /// the result is what one sequential pass over both would collect.
+    fn append(&mut self, other: Self) {
+        for (group, paths) in other.deferred_props {
+            let list = self
+                .deferred_props
+                .entry(group)
+                .or_insert_with(|| Value::Array(vec![]));
+            if let (Value::Array(list), Value::Array(paths)) = (list, paths) {
+                list.extend(paths);
+            }
+        }
+        self.scroll_props.extend(other.scroll_props);
+        self.merge_props.extend(other.merge_props);
+        self.prepend_props.extend(other.prepend_props);
+        self.deep_merge_props.extend(other.deep_merge_props);
+        self.match_props_on.extend(other.match_props_on);
+        self.once_props.extend(other.once_props);
+        self.rescued_props.extend(other.rescued_props);
+    }
 }
 
 struct Resolver<'v> {
     visit: &'v Visit,
-    meta: Metadata,
 }
 
 fn join(prefix: &str, key: &str) -> String {
@@ -114,17 +142,29 @@ fn join(prefix: &str, key: &str) -> String {
 
 impl Resolver<'_> {
     /// deep_transform_props: resolves every entry of `props` under `prefix`.
-    fn transform(
-        &mut self,
+    /// Entries resolve concurrently, each into its own metadata, which is
+    /// then appended to `meta` in entry order.
+    fn transform<'a>(
+        &'a self,
         props: Props,
         prefix: String,
         parent_resolved: bool,
-    ) -> BoxFuture<'_, Result<Map<String, Value>>> {
+        meta: &'a mut Metadata,
+    ) -> BoxFuture<'a, Result<Map<String, Value>>> {
         Box::pin(async move {
-            let mut out = Map::new();
-            for (key, prop) in props.entries {
+            let entries = props.entries.into_iter().map(|(key, prop)| {
                 let path = join(&prefix, &key);
-                if let Some(value) = self.entry(prop, path, parent_resolved).await? {
+                async move {
+                    let mut own = Metadata::default();
+                    let value = self.entry(prop, path, parent_resolved, &mut own).await;
+                    (key, value, own)
+                }
+            });
+            let mut out = Map::new();
+            for (key, value, own) in join_all(entries).await {
+                let value = value?;
+                meta.append(own);
+                if let Some(value) = value {
                     out.insert(key, value);
                 }
             }
@@ -133,12 +173,13 @@ impl Resolver<'_> {
     }
 
     /// One prop at `path`; `None` omits it.
-    fn entry(
-        &mut self,
+    fn entry<'a>(
+        &'a self,
         mut prop: Prop,
         path: String,
         parent_resolved: bool,
-    ) -> BoxFuture<'_, Result<Option<Value>>> {
+        meta: &'a mut Metadata,
+    ) -> BoxFuture<'a, Result<Option<Value>>> {
         Box::pin(async move {
             // Unmodified containers: recurse (filtering only).
             if !prop.is_modified() {
@@ -147,7 +188,7 @@ impl Resolver<'_> {
                         if !parent_resolved && self.excluded_by_partial(&path) {
                             return Ok(None);
                         }
-                        let map = self.transform(nested, path, parent_resolved).await?;
+                        let map = self.transform(nested, path, parent_resolved, meta).await?;
                         return Ok((!map.is_empty()).then_some(Value::Object(map)));
                     }
                     Source::Value(Value::Object(map)) if !map.is_empty() => {
@@ -168,7 +209,7 @@ impl Resolver<'_> {
                             return Ok(None);
                         }
                         return self
-                            .transform_array(items, path, parent_resolved)
+                            .transform_array(items, path, parent_resolved, meta)
                             .await
                             .map(Some);
                     }
@@ -177,7 +218,7 @@ impl Resolver<'_> {
             }
 
             self.apply_scroll_intent(&mut prop);
-            self.collect_metadata(&prop, &path);
+            self.collect_metadata(&prop, &path, meta);
             if !self.keep(&prop, &path, parent_resolved) {
                 return Ok(None);
             }
@@ -186,11 +227,14 @@ impl Resolver<'_> {
             // A plain closure (a Ruby Proc, as opposed to a BaseProp) may
             // return a prop wrapper or a tree of them.
             let closure = !prop.is_modified();
-            match self.evaluate(prop, &path, parent_resolved, closure).await {
+            match self
+                .evaluate(prop, &path, parent_resolved, closure, meta)
+                .await
+            {
                 Ok(v) => Ok(v),
                 Err(e) if rescue => {
                     tracing::error!(prop = %path, error = %e, "inertia: rescued prop error");
-                    self.meta.rescued_props.push(path);
+                    meta.rescued_props.push(path);
                     Ok(None)
                 }
                 Err(e) => Err(e),
@@ -203,34 +247,35 @@ impl Resolver<'_> {
     /// `path`), and nested props or arrays it returns are resolved as a
     /// parent that was already resolved (no further partial filtering).
     fn evaluate<'a>(
-        &'a mut self,
+        &'a self,
         prop: Prop,
         path: &'a str,
         parent_resolved: bool,
         closure: bool,
+        meta: &'a mut Metadata,
     ) -> BoxFuture<'a, Result<Option<Value>>> {
         Box::pin(async move {
             match prop.source {
                 Source::Value(v) => Ok(Some(v)),
                 Source::Nested(nested) => {
                     let was_empty = nested.is_empty();
-                    let map = self.transform(nested, path.to_owned(), true).await?;
+                    let map = self.transform(nested, path.to_owned(), true, meta).await?;
                     Ok((was_empty || !map.is_empty()).then_some(Value::Object(map)))
                 }
                 Source::Array(items) => self
-                    .transform_array(items, path.to_owned(), true)
+                    .transform_array(items, path.to_owned(), true, meta)
                     .await
                     .map(Some),
                 Source::Lazy(f) => {
                     let mut value = f().await?;
                     if closure && value.is_modified() {
                         self.apply_scroll_intent(&mut value);
-                        self.collect_metadata(&value, path);
+                        self.collect_metadata(&value, path, meta);
                         if !self.keep(&value, path, parent_resolved) {
                             return Ok(None);
                         }
                     }
-                    self.evaluate(value, path, true, false).await
+                    self.evaluate(value, path, true, false, meta).await
                 }
             }
         })
@@ -240,38 +285,52 @@ impl Resolver<'_> {
     /// (Rails' `needs_transform?`) is returned intact, exactly as the same
     /// data would be through [`Prop::value`]. Otherwise items that are maps
     /// resolve at `path.<index>` (and are dropped when that leaves them
-    /// empty); other items are evaluated.
-    fn transform_array(
-        &mut self,
+    /// empty); other items are evaluated. Items resolve concurrently, like
+    /// the entries of [`Resolver::transform`].
+    fn transform_array<'a>(
+        &'a self,
         items: Vec<Prop>,
         path: String,
         parent_resolved: bool,
-    ) -> BoxFuture<'_, Result<Value>> {
+        meta: &'a mut Metadata,
+    ) -> BoxFuture<'a, Result<Value>> {
         Box::pin(async move {
             if !items.iter().any(needs_transform) {
                 return Ok(Value::Array(items.into_iter().map(into_json).collect()));
             }
-            let mut out = Vec::with_capacity(items.len());
-            for (i, item) in items.into_iter().enumerate() {
+            let len = items.len();
+            let items = items.into_iter().enumerate().map(|(i, item)| {
                 let item_path = join(&path, &i.to_string());
-                let map = match item.source {
-                    Source::Nested(nested) if !item.is_modified() => Some(nested),
-                    Source::Value(obj @ Value::Object(_)) if !item.is_modified() => {
-                        Some(Props::from_json(obj))
-                    }
-                    source => {
-                        let item = Prop { source, ..item };
-                        if let Some(v) = self.evaluate(item, &item_path, true, false).await? {
-                            out.push(v);
+                async move {
+                    let mut own = Metadata::default();
+                    let map = match item.source {
+                        Source::Nested(nested) if !item.is_modified() => Some(nested),
+                        Source::Value(obj @ Value::Object(_)) if !item.is_modified() => {
+                            Some(Props::from_json(obj))
                         }
-                        None
-                    }
-                };
-                if let Some(map) = map {
-                    let map = self.transform(map, item_path, parent_resolved).await?;
-                    if !map.is_empty() {
-                        out.push(Value::Object(map));
-                    }
+                        source => {
+                            let item = Prop { source, ..item };
+                            let value =
+                                self.evaluate(item, &item_path, true, false, &mut own).await;
+                            return (value, own);
+                        }
+                    };
+                    let value = match map {
+                        Some(map) => self
+                            .transform(map, item_path, parent_resolved, &mut own)
+                            .await
+                            .map(|map| (!map.is_empty()).then_some(Value::Object(map))),
+                        None => Ok(None),
+                    };
+                    (value, own)
+                }
+            });
+            let mut out = Vec::with_capacity(len);
+            for (value, own) in join_all(items).await {
+                let value = value?;
+                meta.append(own);
+                if let Some(value) = value {
+                    out.push(value);
                 }
             }
             Ok(Value::Array(out))
@@ -326,12 +385,11 @@ impl Resolver<'_> {
         }
     }
 
-    fn collect_metadata(&mut self, prop: &Prop, path: &str) {
+    fn collect_metadata(&self, prop: &Prop, path: &str, meta: &mut Metadata) {
         // Deferred
         if let Kind::Defer { group } = &prop.kind {
             if !self.visit.partial && !self.excluded_by_once_cache(prop, path) {
-                let list = self
-                    .meta
+                let list = meta
                     .deferred_props
                     .entry(group.clone())
                     .or_insert_with(|| Value::Array(vec![]));
@@ -347,32 +405,32 @@ impl Resolver<'_> {
                 let resetting = self.visit.reset.iter().any(|k| k == path);
                 if let Some(scroll) = &prop.scroll {
                     if self.visit.partial || !matches!(prop.kind, Kind::Defer { .. }) {
-                        let mut meta = serde_json::to_value(&scroll.metadata)
+                        let mut entry = serde_json::to_value(&scroll.metadata)
                             .unwrap_or_else(|_| Value::Object(Map::new()));
-                        if let Value::Object(m) = &mut meta {
+                        if let Value::Object(m) = &mut entry {
                             m.insert("reset".into(), Value::Bool(resetting));
                         }
-                        self.meta.scroll_props.insert(path.to_owned(), meta);
+                        meta.scroll_props.insert(path.to_owned(), entry);
                     }
                 }
                 if !resetting {
                     let at_root = spec.appends_at.is_empty() && spec.prepends_at.is_empty();
                     if spec.deep {
-                        self.meta.deep_merge_props.push(path.to_owned());
+                        meta.deep_merge_props.push(path.to_owned());
                     } else if at_root && spec.append {
-                        self.meta.merge_props.push(path.to_owned());
+                        meta.merge_props.push(path.to_owned());
                     } else if at_root {
-                        self.meta.prepend_props.push(path.to_owned());
+                        meta.prepend_props.push(path.to_owned());
                     } else {
                         for p in &spec.appends_at {
-                            self.meta.merge_props.push(join(path, p));
+                            meta.merge_props.push(join(path, p));
                         }
                         for p in &spec.prepends_at {
-                            self.meta.prepend_props.push(join(path, p));
+                            meta.prepend_props.push(join(path, p));
                         }
                     }
                     for m in &spec.match_on {
-                        self.meta.match_props_on.push(join(path, m));
+                        meta.match_props_on.push(join(path, m));
                     }
                 }
             }
@@ -387,7 +445,7 @@ impl Resolver<'_> {
                 if let Some(at) = once.expires_at {
                     entry.insert("expiresAt".into(), Value::from(at));
                 }
-                self.meta.once_props.insert(key, Value::Object(entry));
+                meta.once_props.insert(key, Value::Object(entry));
             }
         }
     }
@@ -557,6 +615,101 @@ mod tests {
         let (_, m) = run(props, &visit).await;
         assert_eq!(m["prependProps"], json!(["posts.data"]));
         assert_eq!(m["scrollProps"]["posts"]["reset"], json!(false));
+    }
+
+    /// A lazy prop that sleeps `ms` (virtual time) before yielding `value`.
+    fn nap(ms: u64, value: Value) -> Prop {
+        lazy(move || async move {
+            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+            Ok(value)
+        })
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sibling_and_nested_lazy_props_resolve_concurrently() {
+        let props = Props::new()
+            .prop("a", nap(100, json!(1)))
+            .prop("b", nap(100, json!(2)))
+            .prop("c", nap(100, json!(3)))
+            .prop(
+                "nested",
+                Props::new()
+                    .prop("d", nap(100, json!(4)))
+                    .prop("rows", Prop::array(vec![nap(100, json!(5))])),
+            );
+        let started = tokio::time::Instant::now();
+        let (p, _) = run(props, &Visit::default()).await;
+        let elapsed = started.elapsed();
+        assert_eq!(
+            p,
+            json!({"a": 1, "b": 2, "c": 3, "nested": {"d": 4, "rows": [5]}})
+        );
+        // Five 100 ms props one after another would take 500 ms.
+        assert!(
+            elapsed < std::time::Duration::from_millis(150),
+            "lazy props ran one after another: {elapsed:?}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn concurrent_props_keep_prop_order_in_props_and_metadata() {
+        // The first prop finishes last; key order and every metadata list
+        // must still follow prop order, not completion order.
+        let props = || {
+            Props::new()
+                .prop("slow", nap(300, json!([1])).merge().once())
+                .prop("mid", nap(200, json!([2])).prepend().match_on("id"))
+                .prop("fast", nap(100, json!({"x": 1})).deep_merge())
+                .prop("later", defer(|| async { Ok(1) }).group("g"))
+                .prop("skipped", nap(50, Value::Null).optional())
+                .prop(
+                    "tree",
+                    lazy_prop(|| async {
+                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                        Ok(Props::new()
+                            .prop("x", defer(|| async { Ok(1) }).group("g"))
+                            .prop("y", merge(|| async { Ok(json!([3])) })))
+                    }),
+                )
+        };
+        let (p, m) = run(props(), &Visit::default()).await;
+        let keys: Vec<&str> = p.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(keys, ["slow", "mid", "fast", "tree"]);
+        assert_eq!(
+            serde_json::to_string(&m).unwrap(),
+            json!({
+                "deferredProps": {"g": ["later", "tree.x"]},
+                "mergeProps": ["slow", "tree.y"],
+                "prependProps": ["mid"],
+                "deepMergeProps": ["fast"],
+                "matchPropsOn": ["mid.id"],
+                "onceProps": {"slow": {"prop": "slow"}},
+            })
+            .to_string(),
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_first_failing_prop_in_prop_order_is_the_error() {
+        let fail = |ms: u64, msg: &'static str| {
+            lazy(move || async move {
+                tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+                Err::<i64, _>(loco_rs::Error::string(msg))
+            })
+        };
+        let props = Props::new()
+            .prop("ok", nap(10, json!(1)))
+            .prop("first", fail(200, "first"))
+            .prop("second", fail(100, "second"));
+        let err = resolve(props, &Visit::default()).await.unwrap_err();
+        assert!(err.to_string().contains("first"), "{err}");
+
+        // Rescued failures are listed in prop order, not completion order.
+        let props = Props::new()
+            .prop("first", fail(200, "first").rescue())
+            .prop("second", fail(100, "second").rescue());
+        let (_, m) = run(props, &Visit::default()).await;
+        assert_eq!(m, json!({"rescuedProps": ["first", "second"]}));
     }
 
     #[tokio::test]
