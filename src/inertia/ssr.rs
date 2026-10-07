@@ -23,7 +23,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{config::Settings, page::Page, request_log};
+use super::{config::Settings, request_log};
 
 /// What `@inertiajs/react/server` returns: head tags and the body HTML
 /// (which already contains the `<script data-page>` and `<div id="app">`).
@@ -33,7 +33,9 @@ pub struct SsrOutput {
     pub body: String,
 }
 
-/// Posts page JSON to the SSR server.
+/// Posts page JSON to the SSR server: inertia-omega's SSR gateway. Unlike omega's
+/// `HttpGateway`, a failed render logs only the status and component, never the error body,
+/// which echoes the page (a password-reset URL's `?sid=…`, the props).
 #[derive(Debug, Clone)]
 pub struct SsrClient {
     http: reqwest::Client,
@@ -80,7 +82,7 @@ impl SsrClient {
     }
 
     /// Renders `page`, or `None` (with a warning) on any failure.
-    pub async fn render(&self, page: &Page) -> Option<SsrOutput> {
+    pub async fn render(&self, page: &omega::Page) -> Option<SsrOutput> {
         match self.try_render(page).await {
             Ok(out) => Some(out),
             Err(e) => {
@@ -91,12 +93,13 @@ impl SsrClient {
         }
     }
 
-    async fn try_render(&self, page: &Page) -> std::result::Result<SsrOutput, String> {
+    async fn try_render(&self, page: &omega::Page) -> std::result::Result<SsrOutput, String> {
+        let body = serde_json::to_string(page).map_err(|e| e.to_string())?;
         let res = self
             .http
             .post(&self.url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(page.to_json())
+            .body(body)
             .send()
             .await
             .map_err(|e| e.to_string())?;
@@ -107,6 +110,21 @@ impl SsrClient {
             return Err(format!("SSR server returned {status}"));
         }
         res.json::<SsrOutput>().await.map_err(|e| e.to_string())
+    }
+}
+
+impl omega::ssr::Gateway for SsrClient {
+    async fn dispatch(
+        &self,
+        page: &omega::Page,
+        _request: &omega::Request,
+    ) -> Option<omega::ssr::Rendered> {
+        self.render(page)
+            .await
+            .map(|SsrOutput { head, body }| omega::ssr::Rendered {
+                head: head.join("\n"),
+                body,
+            })
     }
 }
 

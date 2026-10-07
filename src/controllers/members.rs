@@ -54,7 +54,7 @@ async fn index(
         .render(
             "members/index",
             Props::new()
-                .prop(
+                .with(
                     "members",
                     lazy(move || async move {
                         Ok(memberships::Model::members_of(&db, account_id)
@@ -64,7 +64,7 @@ async fn index(
                             .collect::<Vec<_>>())
                     }),
                 )
-                .prop(
+                .with(
                     "invitations",
                     lazy(move || async move {
                         Ok(if manager {
@@ -74,7 +74,7 @@ async fn index(
                         })
                     }),
                 )
-                .prop("can_manage", manager),
+                .with("can_manage", manager),
         )
         .await
 }

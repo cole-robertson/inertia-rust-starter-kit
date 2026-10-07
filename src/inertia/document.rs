@@ -1,13 +1,19 @@
-//! The HTML root document (mirrors the Rails kit's layouts/application.html.erb).
+//! The HTML root document (mirrors the Rails kit's layouts/application.html.erb): inertia-omega's
+//! root view.
+
+use std::sync::Arc;
 
 use super::{
-    page::Page,
-    ssr::SsrOutput,
-    vite::{escape_attr, nonce_attr},
+    config::Settings,
+    meta,
+    vite::{self, escape_attr, nonce_attr},
 };
 
 /// Root element id (`<div id="app">` / `<script data-page="app">`).
 pub const ROOT_ID: &str = "app";
+
+/// The view data key the request's CSP nonce travels under (`Inertia::render` sets it).
+pub const NONCE: &str = "nonce";
 
 /// Escapes JSON for an HTML `<script>` body: no `</script>`, `<!--`, or
 /// line separators that older parsers treat as newlines.
@@ -30,23 +36,59 @@ pub fn script_safe_json(json: &str) -> String {
 /// `<script data-page="app" type="application/json">` + `<div id="app">`
 /// (inertia-rails' `inertia_root` with `use_script_element_for_initial_page`).
 #[must_use]
-pub fn root(page: &Page, nonce: Option<&str>) -> String {
+pub fn root(page: &omega::Page, nonce: Option<&str>) -> String {
+    let json = serde_json::to_string(page).expect("a page serializes");
     format!(
         "<script data-page=\"{ROOT_ID}\" type=\"application/json\"{}>{}</script>\n<div id=\"{ROOT_ID}\"></div>",
         nonce_attr(nonce),
-        script_safe_json(&page.to_json())
+        script_safe_json(&json)
     )
+}
+
+/// The document for omega's `view` of a first visit: client-rendered with the kit's own page
+/// script (it carries the CSP nonce), or with the SSR server's head and body.
+#[must_use]
+pub fn render(settings: &Arc<Settings>, view: &omega::View<'_>) -> String {
+    let nonce = view.data.get(NONCE).and_then(serde_json::Value::as_str);
+    let ssr_head: Vec<String> = if view.ssr {
+        view.head.lines().map(str::to_owned).collect()
+    } else {
+        Vec::new()
+    };
+    // inertia_meta_tags: with `serverHead` on the client, SSR output
+    // carries the tags in its own head; write only the ones it lacks.
+    let meta_tags = meta::head_html_missing_from(
+        view.page.props.get(settings.meta_prop()),
+        settings.head_attribute(),
+        &ssr_head,
+    );
+    let body = if view.ssr {
+        view.body.to_owned()
+    } else {
+        root(view.page, nonce)
+    };
+    Document {
+        app_name: &settings.app_name,
+        vite_tags: &vite::shared(&settings.vite).tags(nonce),
+        meta_tags: &meta_tags,
+        nonce,
+        ssr_head: &ssr_head.join("\n"),
+        body: &body,
+    }
+    .render()
 }
 
 /// Everything the layout needs.
 pub struct Document<'a> {
     pub app_name: &'a str,
-    pub page: &'a Page,
     pub vite_tags: &'a str,
-    /// Server-managed head tags (`inertia_meta_tags`); empty with SSR.
+    /// Server-managed head tags (`inertia_meta_tags`); with SSR, only those its head lacks.
     pub meta_tags: &'a str,
     pub nonce: Option<&'a str>,
-    pub ssr: Option<SsrOutput>,
+    /// The SSR server's head tags, newline-separated; empty without SSR.
+    pub ssr_head: &'a str,
+    /// The page script and root element, or the SSR server's body (which carries both).
+    pub body: &'a str,
 }
 
 // The Rails layout's PWA manifest link is an ERB comment, so it never reaches the browser.
@@ -62,19 +104,14 @@ const DARK_MODE_SCRIPT: &str = r#"
     "#;
 
 impl Document<'_> {
-    /// Renders the full HTML page. With SSR output, its head is inserted into
-    /// `<head>` and its body (which already carries the page script and root
-    /// div) goes into `<body>` as-is; otherwise the client-side root is emitted.
+    /// Renders the full HTML page. With SSR, its head is inserted into `<head>` and its body
+    /// (which already carries the page script and root div) goes into `<body>` as-is.
     #[must_use]
     pub fn render(&self) -> String {
         let nonce = nonce_attr(self.nonce);
         let app_name = escape_attr(self.app_name);
-        let (ssr_head, body) = match &self.ssr {
-            Some(ssr) => (ssr.head.join("\n"), ssr.body.clone()),
-            None => (String::new(), root(self.page, self.nonce)),
-        };
         // SSR head (or a server-managed title tag) carries its own <title>.
-        let title = if ssr_head.contains("<title") || self.meta_tags.contains("<title") {
+        let title = if self.ssr_head.contains("<title") || self.meta_tags.contains("<title") {
             String::new()
         } else {
             format!("<title data-inertia>{app_name}</title>\n    ")
@@ -106,32 +143,28 @@ impl Document<'_> {
 "#,
             vite = self.vite_tags,
             meta_tags = self.meta_tags,
+            ssr_head = self.ssr_head,
+            body = self.body,
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{json, Map};
+    use serde_json::json;
 
     use super::*;
-    use crate::inertia::resolver::Metadata;
 
-    fn page(props: serde_json::Value) -> Page {
+    fn page(props: serde_json::Value) -> omega::Page {
         let serde_json::Value::Object(props) = props else {
             panic!()
         };
-        Page {
+        omega::Page {
             component: "Home".into(),
             props,
             url: "/".into(),
             version: "v".into(),
-            encrypt_history: false,
-            clear_history: false,
-            flash: None,
-            shared_props: None,
-            preserve_fragment: false,
-            metadata: Metadata::default(),
+            ..omega::Page::default()
         }
     }
 
@@ -152,35 +185,30 @@ mod tests {
 
     #[test]
     fn ssr_body_is_inserted_as_is_and_head_replaces_title() {
-        let p = page(json!({}));
         let doc = Document {
             app_name: "Kit",
-            page: &p,
             vite_tags: "<!--vite-->",
             meta_tags: "",
             nonce: None,
-            ssr: Some(SsrOutput {
-                head: vec!["<title data-inertia>SSR</title>".into()],
-                body: "<script data-page=\"app\">{}</script><div id=\"app\">hi</div>".into(),
-            }),
+            ssr_head: "<title data-inertia>SSR</title>",
+            body: "<script data-page=\"app\">{}</script><div id=\"app\">hi</div>",
         }
         .render();
         assert_eq!(doc.matches("data-page=").count(), 1);
         assert!(doc.contains("<div id=\"app\">hi</div>"));
         assert_eq!(doc.matches("<title").count(), 1);
-        let _ = Map::<String, serde_json::Value>::new();
     }
 
     #[test]
     fn csr_document_has_title_theme_script_and_root() {
-        let p = page(json!({}));
+        let root = root(&page(json!({})), Some("n"));
         let doc = Document {
             app_name: "Kit <&>",
-            page: &p,
             vite_tags: "",
             meta_tags: "",
             nonce: Some("n"),
-            ssr: None,
+            ssr_head: "",
+            body: &root,
         }
         .render();
         assert!(doc.contains("<title data-inertia>Kit &lt;&amp;&gt;</title>"));
@@ -192,15 +220,14 @@ mod tests {
 
     #[test]
     fn server_managed_title_replaces_the_default_one() {
-        let p = page(json!({}));
         let doc = Document {
             app_name: "Kit",
-            page: &p,
             vite_tags: "",
             meta_tags:
                 "<title inertia=\"title\">Page</title>\n<meta name=\"d\" inertia=\"meta-name-d\">",
             nonce: None,
-            ssr: None,
+            ssr_head: "",
+            body: "",
         }
         .render();
         assert_eq!(doc.matches("<title").count(), 1);

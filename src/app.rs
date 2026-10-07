@@ -100,9 +100,9 @@ impl Hooks for App {
         };
         routes
     }
-    /// Layers, outermost first: timing → exceptions → headers → csrf → flash → redirect →
-    /// version → auth → live (the request's `X-Tab-Id`), then (routed requests only) the
-    /// account-slug constraint and the browser check.
+    /// Layers, outermost first: timing → exceptions → headers → csrf → flash → inertia (omega:
+    /// renders, the asset version 409, the redirect rules) → auth → live (the request's
+    /// `X-Tab-Id`), then (routed requests only) the account-slug constraint and the browser check.
     /// (axum applies the last `.layer` outermost, hence the reverse order below.)
     async fn after_routes(router: AxumRouter, ctx: &AppContext) -> Result<AxumRouter> {
         let settings = controllers::settings(ctx)?;
@@ -110,8 +110,7 @@ impl Hooks for App {
         let router = crate::auth::slug_constraint(router);
         let router = crate::live::layer(router);
         let router = crate::auth::layer(router, ctx, settings.clone());
-        let router = inertia::version::layer(router, settings.clone());
-        let router = inertia::redirect::layer(router, settings.clone());
+        let router = inertia::render::layer(router, settings.clone());
         let router = inertia::flash::layer(router, settings.clone());
         let router = inertia::csrf::layer(router, settings.clone());
         let router = inertia::headers::layer(router, settings);

@@ -13,7 +13,7 @@ use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 use crate::{
-    inertia::{config::Settings, precognition, props::Props, render::Inertia},
+    inertia::{config::Settings, precognition, props::IntoProps, render::Inertia},
     models::{
         tokens::{Clock, SystemClock},
         users::Errors,
@@ -175,15 +175,16 @@ pub fn with_invitation(path: &str, token: &str) -> String {
 
 /// Render an Inertia page whose props are plain values: a `json!({..})` object, or a
 /// `Serialize` struct (each field a prop). For lazy, deferred or once props build
-/// [`Props`] and call `inertia.render` instead.
+/// `Props` and call `inertia.render` instead.
 ///
 /// # Errors
-/// When the props don't serialize to JSON, and rendering failures (SSR is non-fatal; see
-/// `inertia::render`).
+/// When the props don't serialize to a JSON object, and rendering failures (SSR is
+/// non-fatal; see `inertia::render`).
 pub async fn render(inertia: Inertia, component: &str, props: impl Serialize) -> Result<Response> {
-    inertia
-        .render(component, Props::from_json(serde_json::to_value(props)?))
-        .await
+    let props = props
+        .into_props()
+        .map_err(|e| Error::Message(e.to_string()))?;
+    inertia.render(component, props).await
 }
 
 /// Sign this browser in to the freshly created `session`: set the permanent signed
