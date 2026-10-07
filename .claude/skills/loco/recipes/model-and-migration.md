@@ -13,6 +13,17 @@ cargo loco db migrate
 That writes the migration, runs it, regenerates `src/models/_entities/posts.rs`,
 and creates `src/models/posts.rs` for your code.
 
+**Editing the generated migration** (a unique index, a composite key) happens after it ran and
+after the entities were written, so they miss the change (`#[sea_orm(unique)]`, `has_one`).
+Rerun both, then commit `src/models/_entities/`:
+
+```sh
+cargo loco db reset && cargo loco db entities    # development data is re-created, not kept
+```
+
+`tests/entities_fresh.rs` (a `bin/ci` step) fails while the committed entities don't match
+what the migrations make.
+
 ### Column DSL
 
 `field:spec`. Suffixes are orthogonal flags:
@@ -183,6 +194,11 @@ cargo loco generate migration AddViewsToPosts views:int!
 cargo loco db migrate
 cargo loco db entities        # regenerate _entities from the new schema
 ```
+
+Unlike `generate model`, `generate migration` neither migrates nor regenerates the entities (it
+prints these two commands). Run them **before** writing code that uses the new columns: until
+the entities have the columns that code doesn't compile, and neither does the CLI that would
+regenerate them.
 
 **The table must be one word.** Loco infers the table from the last word of the name, so
 `add_owner_first_name_to_crm_accounts` (or `AddOwnerFirstNameToCrmAccounts`) can't find

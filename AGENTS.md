@@ -48,7 +48,7 @@ and `docs/RAILS_TO_LOCO.md` (every Rails command and its equivalent here).
 | `migration/` | SeaORM migrations |
 | `config/{development,test,production}.yaml` | Loco config; app settings are under `settings:` |
 | `frontend/` | React app: `pages/`, `components/` (shadcn/ui in `components/ui`), `layouts/`, `routes/` (**generated**), `types/` (`types/generated/` is **generated**) |
-| `tests/` | Rust request/model/protocol tests; `tests/routes_fresh.rs` and `tests/types_fresh.rs` guard the generated routes and prop types |
+| `tests/` | Rust request/model/protocol tests; `tests/routes_fresh.rs`, `tests/types_fresh.rs` and `tests/entities_fresh.rs` guard the generated routes, prop types and SeaORM entities |
 | `e2e/` | Playwright system test, run against the release binary via `bin/e2e-server`; mail goes to `e2e/mail-sink.ts` (read it with `e2e/mail.ts`) |
 | `bin/` | `setup`, `dev`, `ci`, `e2e-server`, `secret` (prints a `SECRET_KEY_BASE`), `rename` |
 | `Dockerfile`, `config/deploy.yml`, `.kamal/` | production image and Kamal 2 deploy |
@@ -100,6 +100,8 @@ npm run lint && npm run format && npm run check
 
 If you touched routes: `cargo loco task routes:generate` and `cargo test --test routes_fresh`.
 If you touched a props struct: `cargo loco task types:generate` and `cargo test --test types_fresh`.
+If you touched a migration: `cargo loco db migrate && cargo loco db entities` (`db reset` first if it
+already ran) and `cargo test --test entities_fresh`.
 Or just run `bin/ci`.
 
 **Every new page or prop gets a budget test**: its exact props, deferred/optional ones, a

@@ -51,7 +51,7 @@ and not null. `references` is the exception: bare is `NOT NULL`, `references?` i
 | `rails db:reset` | `cargo loco db reset` then `cargo loco db seed` | |
 | `rails db:seed` | `cargo loco db seed` | Loads `src/fixtures/*.yaml` (Loco's seeds are YAML fixtures). `--reset` truncates first. |
 | `rails db:schema:dump` | `cargo loco db schema` | |
-| (Active Record reads the schema) | `cargo loco db entities` | Regenerates `src/models/_entities/` from the live DB. Rust has no runtime reflection, so this step is how the model learns its columns; run it after every migration. |
+| (Active Record reads the schema) | `cargo loco db entities` | Regenerates `src/models/_entities/` from the live DB. Rust has no runtime reflection, so this step is how the model learns its columns; run it after every migration (before code uses the new columns, or the CLI won't build to run it), and after editing a migration that already ran (`db reset && db entities`). `tests/entities_fresh.rs` fails when the committed entities are stale. |
 | `rails dbconsole` | `sqlite3 inertia_rust_starter_kit_development.sqlite` | |
 
 ## Console, runner, routes
