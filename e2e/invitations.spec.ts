@@ -6,8 +6,8 @@ import { lastMailTo } from "./mail"
 // Organizations end to end: the owner invites, the invitee opens the mailed link, signs up,
 // lands in Acme, and the account switcher shows their accounts. The app sends the mail over
 // SMTP to e2e/mail-sink.ts, which this reads it back from. The pages mark elements with
-// `data-test` (Capybara's convention, from the Rails twin they were written for), hence the CSS
-// locators.
+// `data-test` (Capybara's convention, from the Rails twin they were written for), which
+// `getByTestId` reads too (`testIdAttribute` in playwright.config.ts).
 
 const password = "Secret1*3*5*"
 

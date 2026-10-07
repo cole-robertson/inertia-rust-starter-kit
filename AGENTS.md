@@ -116,7 +116,9 @@ assert_max_queries(6, || async { vec![visit(&server, &ctx, "/acme/reports").awai
 
 More in `.claude/skills/starter-kit/recipes/inertia-page.md`, "Budget tests". Playwright specs
 that need a signed-in user import `test` from `e2e/fixtures.ts` (one@ as `page`, two@ as `two`,
-signed in once per server) instead of signing in themselves.
+signed in once per server) instead of signing in themselves. Mark elements for specs with
+`data-test="…"` (not `data-testid`): `playwright.config.ts` sets `testIdAttribute: "data-test"`,
+so `page.getByTestId("…")` finds them.
 
 ## More
 

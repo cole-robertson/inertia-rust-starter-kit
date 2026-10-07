@@ -18,6 +18,9 @@ export default defineConfig({
   reporter: "list",
   use: {
     trace: "retain-on-failure",
+    // The pages mark elements with `data-test` (Capybara's convention, from the Rails twin), so
+    // `getByTestId("x")` finds `data-test="x"`, the same element `[data-test="x"]` does.
+    testIdAttribute: "data-test",
   },
   projects: [
     // one@ and two@ sign in once per server (e2e/auth.setup.ts, used through e2e/fixtures.ts):
