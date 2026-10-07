@@ -147,6 +147,7 @@ the redirect) and by reading both sources.
 | `clearHistory` on sign-out and delete | true | true | same | |
 | `flash` top-level page key (`notice`/`alert`) | inertia_rails flash_keys | K:inertia/flash.rs | same | |
 | `_inertia_meta` prop on home and dashboard (title + description) | none: the pages set their `<title>` with `<Head>` | K:home.rs, dashboard.rs | differs → fixed: removed. It was added to exercise the meta-tag API, but the pages already set the same titles with `<Head>`, and the extra `<title inertia>` and `<meta name="description">` changed the HTML head. The meta API stays (`src/inertia/meta.rs`, `tests/inertia_a.rs`); e2e/head.spec.ts now checks the Rails head and titles | yes |
+| lazy props resolve concurrently (siblings and nested levels), page and metadata still in prop order | `props_resolver.rb` evaluates them one by one | K:inertia/resolver.rs `resolve` | extra (from inertia-omega): the same page object, sooner (the members page's `members` and `invitations` now load together). Only timing changes, so no oracle step does | |
 
 ### Models
 
