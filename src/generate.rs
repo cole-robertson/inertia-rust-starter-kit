@@ -267,9 +267,41 @@ pub fn entity_tables(root: &Path) -> Vec<(String, bool)> {
     tables
 }
 
+/// What to say after `cargo loco generate migration <name>` succeeds, or `None` for any other
+/// command. Loco's own message names `db migrate && db entities`, but not that (unlike
+/// `generate model`) it ran neither, nor that once code uses the new columns the CLI that would
+/// regenerate the entities no longer builds.
+#[must_use]
+pub fn migration_next_steps(args: &[String]) -> Option<&'static str> {
+    if args.iter().any(|a| a == "-h" || a == "--help") {
+        return None;
+    }
+    matches!(
+        first_positionals(args).as_slice(),
+        ["generate" | "g", "migration", _]
+    )
+    .then_some(
+        "Not run yet: `cargo loco db migrate && cargo loco db entities`. Run both before any \
+         code uses the new columns (the CLI has to build to run them), then commit \
+         src/models/_entities/. Edit the migration first if it needs an index or a unique key; \
+         to change it after it ran: `cargo loco db down`, edit, then both again. \
+         tests/entities_fresh.rs fails while the committed entities are stale.",
+    )
+}
+
 /// `("scaffold" | "controller", name)` when `args` is `generate|g scaffold|controller <name>
-/// …`, skipping Loco's global `-e/--environment <env>` wherever it sits.
+/// …`.
 fn generator(args: &[String]) -> Option<(&'static str, &str)> {
+    match first_positionals(args).as_slice() {
+        ["generate" | "g", "scaffold", name, ..] => Some(("scaffold", name)),
+        ["generate" | "g", "controller", name, ..] => Some(("controller", name)),
+        _ => None,
+    }
+}
+
+/// The first three positional arguments after the binary, skipping flags and Loco's global
+/// `-e/--environment <env>` wherever it sits.
+fn first_positionals(args: &[String]) -> Vec<&str> {
     let mut positional = Vec::new();
     let mut rest = args.iter().skip(1);
     while let Some(arg) = rest.next() {
@@ -282,11 +314,7 @@ fn generator(args: &[String]) -> Option<(&'static str, &str)> {
             }
         }
     }
-    match positional.as_slice() {
-        ["generate" | "g", "scaffold", name, ..] => Some(("scaffold", name)),
-        ["generate" | "g", "controller", name, ..] => Some(("controller", name)),
-        _ => None,
-    }
+    positional
 }
 
 #[cfg(test)]
@@ -461,6 +489,27 @@ mod tests {
             "cli db migrate",
         ] {
             assert_eq!(plan(&args(line), root()).unwrap(), None, "{line}");
+        }
+    }
+
+    #[test]
+    fn generate_migration_names_the_commands_that_regenerate_the_entities() {
+        for line in [
+            "cli generate migration AddViewsToPosts views:int!",
+            "cli -e test g migration add_views_to_posts views:int",
+        ] {
+            let next = migration_next_steps(&args(line)).expect(line);
+            assert!(
+                next.contains("cargo loco db migrate && cargo loco db entities"),
+                "{next}"
+            );
+        }
+        for line in [
+            "cli generate migration --help",
+            "cli generate model posts title:string!",
+            "cli db migrate",
+        ] {
+            assert_eq!(migration_next_steps(&args(line)), None, "{line}");
         }
     }
 

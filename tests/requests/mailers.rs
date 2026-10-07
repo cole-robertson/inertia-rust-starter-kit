@@ -90,3 +90,40 @@ async fn user_data_is_html_escaped_in_the_html_part() {
     })
     .await;
 }
+
+/// A non-ASCII subject goes out as RFC 2047 encoded words, folded over lines when long;
+/// `decode_qp` (and `e2e/mail.ts`) read it back as written.
+#[tokio::test]
+#[serial]
+async fn a_non_ascii_subject_is_read_back_as_written() {
+    with_app(|_server, ctx| async move {
+        let subject = "Radar · Oct 8 · 4 Rebulk, 5 tech · a long subject that lettre folds";
+        ctx.mailer
+            .as_ref()
+            .unwrap()
+            .mail(&loco_rs::mailer::Email {
+                from: Some("from@example.com".into()),
+                to: ONE.into(),
+                subject: subject.into(),
+                text: "Hi".into(),
+                html: "<p>Hi</p>".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let raw = &deliveries(&ctx)[0];
+        let header = &raw[raw.find("Subject: ").unwrap()..];
+        let header = &header[..header.find("\r\n").unwrap() + 3];
+        assert!(header.contains("=?utf-8?b?"), "encoded words: {header}");
+        assert!(
+            header.ends_with("\r\n "),
+            "folded onto a second line: {header}"
+        );
+        assert!(
+            decode_qp(raw).contains(&format!("Subject: {subject}\r\n")),
+            "{}",
+            decode_qp(raw)
+        );
+    })
+    .await;
+}

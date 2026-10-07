@@ -22,11 +22,16 @@
 //!
 //! The MAC is compared in constant time, and the fingerprint is compared in
 //! constant time as well.
+//!
+//! [`sign`] and [`verify_signed`] are the same scheme for anything that isn't a user (Rails'
+//! `message_verifier(purpose).generate(data, expires_in:)`): a one-click link for a record and
+//! an action, an unsubscribe link. Their purpose is a string the app picks, and their keys are
+//! derived under `"signed/"`, apart from the user tokens' `"tokens/"`.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
 use hmac::{Hmac, KeyInit, Mac};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
@@ -119,12 +124,40 @@ impl std::fmt::Display for TokenError {
 
 impl std::error::Error for TokenError {}
 
-fn derived_key(secret_key_base: &[u8], purpose: Purpose) -> HmacSha256 {
+/// `HMAC-SHA256(secret_key_base, namespace + purpose)` as a MAC key.
+fn derived_key(secret_key_base: &[u8], namespace: &[u8], purpose: &str) -> HmacSha256 {
     let mut kdf = HmacSha256::new_from_slice(secret_key_base).expect("HMAC accepts any key size");
-    kdf.update(b"tokens/");
-    kdf.update(purpose.as_str().as_bytes());
+    kdf.update(namespace);
+    kdf.update(purpose.as_bytes());
     let key = kdf.finalize().into_bytes();
     HmacSha256::new_from_slice(&key).expect("HMAC accepts any key size")
+}
+
+/// `base64url(payload) "." base64url(mac)`.
+fn seal(mut mac: HmacSha256, payload: &[u8]) -> String {
+    mac.update(payload);
+    let sig = mac.finalize().into_bytes();
+    format!(
+        "{}.{}",
+        URL_SAFE_NO_PAD.encode(payload),
+        URL_SAFE_NO_PAD.encode(sig)
+    )
+}
+
+/// The payload bytes of a [`seal`]ed token whose MAC checks out (in constant time).
+fn unseal(mut mac: HmacSha256, token: &str) -> Result<Vec<u8>, TokenError> {
+    let (payload_b64, sig_b64) = token.split_once('.').ok_or(TokenError::Malformed)?;
+    let payload = URL_SAFE_NO_PAD
+        .decode(payload_b64)
+        .map_err(|_| TokenError::Malformed)?;
+    let sig = URL_SAFE_NO_PAD
+        .decode(sig_b64)
+        .map_err(|_| TokenError::Malformed)?;
+    mac.update(&payload);
+    // `verify_slice` is constant time.
+    mac.verify_slice(&sig)
+        .map_err(|_| TokenError::BadSignature)?;
+    Ok(payload)
 }
 
 /// Mint a token for record `id` with the given fingerprint.
@@ -144,13 +177,9 @@ pub fn generate(
     };
     // Serializing a struct of plain strings/ints cannot fail.
     let bytes = serde_json::to_vec(&payload).unwrap_or_default();
-    let mut mac = derived_key(secret_key_base, purpose);
-    mac.update(&bytes);
-    let sig = mac.finalize().into_bytes();
-    format!(
-        "{}.{}",
-        URL_SAFE_NO_PAD.encode(&bytes),
-        URL_SAFE_NO_PAD.encode(sig)
+    seal(
+        derived_key(secret_key_base, b"tokens/", purpose.as_str()),
+        &bytes,
     )
 }
 
@@ -189,19 +218,10 @@ pub fn verify(
     token: &str,
     clock: &dyn Clock,
 ) -> Result<Claims, TokenError> {
-    let (payload_b64, sig_b64) = token.split_once('.').ok_or(TokenError::Malformed)?;
-    let payload_bytes = URL_SAFE_NO_PAD
-        .decode(payload_b64)
-        .map_err(|_| TokenError::Malformed)?;
-    let sig = URL_SAFE_NO_PAD
-        .decode(sig_b64)
-        .map_err(|_| TokenError::Malformed)?;
-
-    let mut mac = derived_key(secret_key_base, purpose);
-    mac.update(&payload_bytes);
-    // `verify_slice` is constant time.
-    mac.verify_slice(&sig)
-        .map_err(|_| TokenError::BadSignature)?;
+    let payload_bytes = unseal(
+        derived_key(secret_key_base, b"tokens/", purpose.as_str()),
+        token,
+    )?;
 
     let payload: Payload =
         serde_json::from_slice(&payload_bytes).map_err(|_| TokenError::Malformed)?;
@@ -215,4 +235,69 @@ pub fn verify(
         id: payload.id,
         fingerprint: payload.fp,
     })
+}
+
+#[derive(Serialize)]
+struct SignedPayload<'a, T> {
+    purpose: &'a str,
+    exp: i64,
+    data: &'a T,
+}
+
+#[derive(Deserialize)]
+struct SignedPayloadOwned<T> {
+    purpose: String,
+    exp: i64,
+    data: T,
+}
+
+/// Sign `data` for `purpose`, valid for `expires_in`: a token for something that isn't a user
+/// (`tokens::sign(key, "vote", &(item_id, 1), Duration::days(30), clock)`). The data is
+/// readable by whoever holds the token (it is signed, not encrypted), so put ids in it, not
+/// secrets. Each purpose has its own derived key, so a token signed for one never verifies for
+/// another.
+///
+/// # Errors
+/// When `data` doesn't serialize to JSON (a map with non-string keys).
+pub fn sign<T: Serialize>(
+    secret_key_base: &[u8],
+    purpose: &str,
+    data: &T,
+    expires_in: Duration,
+    clock: &dyn Clock,
+) -> Result<String, serde_json::Error> {
+    let bytes = serde_json::to_vec(&SignedPayload {
+        purpose,
+        exp: (clock.now() + expires_in).timestamp(),
+        data,
+    })?;
+    Ok(seal(
+        derived_key(secret_key_base, b"signed/", purpose),
+        &bytes,
+    ))
+}
+
+/// The data of a token [`sign`]ed for `purpose`, checking the signature, the purpose and the
+/// expiry.
+///
+/// # Errors
+/// [`TokenError::BadSignature`] for another purpose, secret or a tampered token,
+/// [`TokenError::Expired`] past its expiry, [`TokenError::Malformed`] for anything that isn't a
+/// token or whose data isn't a `T`.
+pub fn verify_signed<T: DeserializeOwned>(
+    secret_key_base: &[u8],
+    purpose: &str,
+    token: &str,
+    clock: &dyn Clock,
+) -> Result<T, TokenError> {
+    let bytes = unseal(derived_key(secret_key_base, b"signed/", purpose), token)?;
+    let payload: SignedPayloadOwned<T> =
+        serde_json::from_slice(&bytes).map_err(|_| TokenError::Malformed)?;
+    if payload.purpose != purpose {
+        return Err(TokenError::WrongPurpose);
+    }
+    if clock.now().timestamp() >= payload.exp {
+        return Err(TokenError::Expired);
+    }
+    Ok(payload.data)
 }

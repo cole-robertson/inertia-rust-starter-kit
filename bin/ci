@@ -32,6 +32,9 @@ step "JavaScript: generated routes are fresh" \
 step "JavaScript: generated prop types are fresh" \
   "cargo test --test types_fresh && git diff --exit-code -- frontend/types/generated && test -z \"\$(git ls-files --others --exclude-standard -- frontend/types/generated)\""
 
+step "Rust: generated entities are fresh" \
+  "sea-orm-cli --version > /dev/null 2>&1 || { echo 'sea-orm-cli missing: cargo install --locked sea-orm-cli@2.0.4' >&2; exit 1; }; cargo test --test entities_fresh"
+
 step "Security: Cargo audit (cargo-deny)" "cargo deny --version > /dev/null 2>&1 || { echo 'cargo-deny missing: cargo install --locked cargo-deny' >&2; exit 1; }; cargo deny check"
 step "Security: NPM vulnerability audit" "npm audit"
 step "Security: NPM vulnerability audit (deploy/cloudflare)" "npm audit --prefix deploy/cloudflare"

@@ -31,6 +31,22 @@ scheduler:
       schedule: "0 0 3 * * *"      # sec min hour day month weekday, UTC
 ```
 
+**The schedule is UTC**, and has no time zone setting. A job at a local hour ("6 every morning
+in Chicago") moves by an hour across daylight saving time, so schedule it at both UTC hours it
+can fall on (`0 0 11,12 * * *` for 06:00 America/Chicago: CDT is UTC-5, CST UTC-6) and have the
+task return early unless it is that hour locally (`cargo add chrono-tz`):
+
+```rust
+use chrono::Timelike;
+// In `run`, before the work:
+if chrono::Utc::now().with_timezone(&chrono_tz::America::Chicago).hour() != 6 {
+    return Ok(());
+}
+```
+
+Exactly one of the two runs does the work each day. Put the check in a function that takes the
+time, and test it in both a summer and a winter month.
+
 `cargo loco generate scheduler` writes a separate `config/scheduler.yaml` instead; that file is
 read **only** with `cargo loco scheduler --config config/scheduler.yaml`. Plain `--list` then
 reports `Scheduler(Empty)`. Prefer the env-config block above.
