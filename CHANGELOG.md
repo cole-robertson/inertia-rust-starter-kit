@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **deploy/cloudflare pins `sharp` to ^0.35.5** with an npm override, for GHSA-wq5f-xc86-pv6w
+  (high severity; `sharp` comes in through `wrangler`, `miniflare` and `cf`, whose own releases
+  still pin 0.35.4). Remove the override once they move.
+
 ## 0.2.0 - 2026-10-06
 
 - **Typed page props.** A page's props are a Rust struct deriving `Serialize` and `ts_rs::TS`,
