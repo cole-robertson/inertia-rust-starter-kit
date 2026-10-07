@@ -43,6 +43,10 @@ Template rules (`.t` files are not autoescaped): pipe every user-controlled valu
 
 From address: `settings.mail_from` (`MAIL_FROM` in production). Links: build them from
 `settings.app_url` plus a `route_table` path, never from the request's Host header.
+A link that works without signing in (a one-click vote, unsubscribe) carries a signed token:
+`tokens::sign(secret_key_base, "vote", &data, Duration::days(30), clock)` in the mail, and
+`tokens::verify_signed::<Data>(…)` in the handler (`src/models/tokens.rs`; a user's own links
+use `generate_token_for` instead). The data is signed, not encrypted: ids, not secrets.
 
 ## Delivery by environment
 
