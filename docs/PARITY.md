@@ -150,6 +150,7 @@ the redirect) and by reading both sources.
 | lazy props resolve concurrently (siblings and nested levels), page and metadata still in prop order | `props_resolver.rb` evaluates them one by one | K:inertia/resolver.rs `resolve` | extra (from inertia-omega): the same page object, sooner (the members page's `members` and `invitations` now load together). Only timing changes, so no oracle step does | |
 | an Inertia redirect (201/301/302/303/307/308) to a URL with `#fragment` → 409 + `X-Inertia-Redirect` (not for prefetches) | none: fetch follows the redirect and drops the fragment | K:inertia/redirect.rs | extra (inertia-laravel `Middleware#handle`, inertia-omega `protocol::after`). No kit route redirects to a fragment, so no oracle step changes | |
 | a prefetch (`Purpose`/`Sec-Purpose`/`X-Moz: prefetch`) leaves the `_flash` cookie alone: it shows no flash, doesn't consume it and doesn't write one | a prefetch reads (and so consumes) the flash like any visit | K:inertia/flash.rs | extra: the kit's own `<Link prefetch>` links would otherwise eat a flash before the visit shows it. The oracle sends no prefetch requests | |
+| a deferred scroll prop with a wrapper: `mergeProps` on the first visit | `["users"]` (`collect_metadata` runs before `ScrollProp#call` sets the wrapper path) | `["users"]` (was `["users.data"]`) | differs → fixed. On the partial reload that loads it the kit reports `users.data`, as inertia-laravel and inertia-omega do; inertia-rails reports `users` on every visit (a non-deferred one too), where inertia-laravel, inertia-omega and the kit report `users.data` once the prop is resolved. No page of either kit uses scroll props, so the oracle can't see it | yes |
 
 ### Models
 
@@ -332,6 +333,11 @@ account overview no longer sends a `projects` placeholder.)
 open. Of the fixed rows, 5 are the "missing" kind: `allow_browser`, the 72-byte password limit,
 the mailer layout, error pages on 400/406/422/500, the `dbc` alias. The other 23 were
 differences.
+
+Four Inertia-layer rows were added later (2026-10-06, ideas from inertia-omega and
+inertia-laravel): one fixed (deferred scroll `mergeProps`) and three extra (concurrent lazy props,
+fragment redirects, prefetches leave the flash alone). None of them shows up in the oracle's 124
+steps, so `allowed.json` is unchanged; the oracle was not re-run for them.
 
 The oracle, with production builds of both kits on one machine, 124 steps:
 

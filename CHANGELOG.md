@@ -18,6 +18,9 @@ into the kit's own Inertia layer:
   prefetch>` sends; also `Sec-Purpose` and `X-Moz`) neither shows, consumes nor writes the
   flash, so hovering a prefetching link no longer eats the "Saved" notice meant for the visit.
   `inertia::redirect::is_prefetch` reads the headers.
+- **Deferred scroll props report `mergeProps: ["users"]` on the first visit,** as inertia-rails,
+  inertia-laravel and inertia-omega do; the partial reload that loads them still reports
+  `users.data`.
 - **deploy/cloudflare pins `sharp` to ^0.35.5** with an npm override, for GHSA-wq5f-xc86-pv6w
   (high severity; `sharp` comes in through `wrangler`, `miniflare` and `cf`, whose own releases
   still pin 0.35.4). Remove the override once they move.
