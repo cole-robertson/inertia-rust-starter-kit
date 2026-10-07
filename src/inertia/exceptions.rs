@@ -53,7 +53,10 @@ async fn middleware(req: Request, next: Next) -> Response {
     }
     let (mut parts, _) = res.into_parts();
     parts.status = status;
+    // The new body is plain text: drop the old body's length, and its encoding (Loco's
+    // compression layer, inside this one, may have compressed it).
     parts.headers.remove(header::CONTENT_LENGTH);
+    parts.headers.remove(header::CONTENT_ENCODING);
     let (content_type, body) = if json {
         (
             "application/json; charset=utf-8",

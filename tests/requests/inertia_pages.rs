@@ -235,3 +235,47 @@ async fn pages_report_how_long_the_app_spent_in_server_timing() {
     })
     .await;
 }
+
+#[tokio::test]
+#[serial]
+async fn error_pages_are_readable_when_loco_compression_is_on() {
+    // The exceptions layer replaces a handler's (already compressed) 404 body with the public
+    // page; the response must not still claim the old body's Content-Encoding, or browsers
+    // fail to decode the page (Chromium never finishes loading it).
+    let compress = |config: &mut loco_rs::config::Config| {
+        config.server.middlewares.compression =
+            Some(loco_rs::controller::middleware::compression::Compression { enable: true });
+    };
+    with_app_config(compress, |server, _ctx| async move {
+        let html = server
+            .get("/invitations/0123456789abcdef0123456789abcdef")
+            .add_header("accept-encoding", "gzip")
+            .await;
+        let json = server
+            .get("/no/such/page")
+            .add_header("accept-encoding", "gzip")
+            .add_header("accept", "application/json")
+            .await;
+        for (res, body) in [
+            (&html, "The page you were looking for doesn't exist"),
+            (&json, r#"{"status":404,"error":"Not Found"}"#),
+        ] {
+            assert_eq!(res.status_code(), 404);
+            let text = match res.headers().get("content-encoding") {
+                Some(encoding) => {
+                    assert_eq!(encoding, "gzip");
+                    let mut text = String::new();
+                    std::io::Read::read_to_string(
+                        &mut flate2::read::GzDecoder::new(res.as_bytes().as_ref()),
+                        &mut text,
+                    )
+                    .expect("the body is gzip, as Content-Encoding says");
+                    text
+                }
+                None => res.text(),
+            };
+            assert!(text.contains(body), "{text}");
+        }
+    })
+    .await;
+}

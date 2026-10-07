@@ -21,6 +21,9 @@ into the kit's own Inertia layer:
 - **Deferred scroll props report `mergeProps: ["users"]` on the first visit,** as inertia-rails,
   inertia-laravel and inertia-omega do; the partial reload that loads them still reports
   `users.data`.
+- **Error pages are readable with compression on.** A handler's 404 (an unknown invitation, a
+  missing record) went out as `public/404.html` with the compressed body's `Content-Encoding`
+  still set, so browsers couldn't decode it; the exceptions layer now drops it.
 - **site/ pins `sharp` to ^0.35.5** too, for the same advisory (it comes in through the
   site's `wrangler`, via `miniflare`).
 - **deploy/cloudflare pins `sharp` to ^0.35.5** with an npm override, for GHSA-wq5f-xc86-pv6w
