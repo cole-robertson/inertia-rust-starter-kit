@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-import { hydrated } from "./fixtures"
+import { hydrated, test as signedIn } from "./fixtures"
 import { lastMailTo } from "./mail"
 
 // Organizations end to end: the owner invites, the invitee opens the mailed link, signs up,
@@ -86,3 +86,33 @@ test("owner invites, the invitee signs up from the mail link, lands in Acme and 
     page.getByRole("menuitem", { name: "Newbie Labs" }).first(),
   ).toBeVisible()
 })
+
+// A non-ASCII account name puts "·" and "é" in the invitation's subject, which lettre sends as
+// RFC 2047 encoded words; lastMailTo matches the decoded subject.
+signedIn(
+  "an invitation from an account with a non-ASCII name arrives with that subject",
+  async ({ two }) => {
+    const run = `${signedIn.info().project.name}-${Date.now()}`
+    const name = `Café · Labs ${run}`
+    const invitee = `cafe-${run}@example.com`
+
+    await two.goto("/accounts/new")
+    await hydrated(two)
+    await two.getByLabel("Account name").fill(name)
+    await two.getByRole("button", { name: "Create account" }).click()
+    await expect(two.getByText("Account created")).toBeVisible()
+    await expect(two).toHaveURL(/\/cafe-labs-/)
+
+    await two.goto(`${new URL(two.url()).pathname}/members`)
+    await hydrated(two)
+    await two.getByLabel("Email address").fill(invitee)
+    await two.getByRole("button", { name: "Send invitation" }).click()
+    await expect(two.getByText(`Invitation sent to ${invitee}`)).toBeVisible()
+
+    await lastMailTo(
+      two,
+      invitee,
+      `Another User invited you to ${name} on Inertia Rust Starter Kit`,
+    )
+  },
+)
