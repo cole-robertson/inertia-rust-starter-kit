@@ -97,6 +97,8 @@ axum-test = { version = "17.3" }
 libsqlite3-sys = { version = "0.37" }
 # Paused virtual time (`#[tokio::test(start_paused = true)]`) for the resolver's concurrency tests.
 tokio = { version = "1.45", features = ["test-util"] }
+# tests/requests/inertia_pages.rs decodes gzip responses (the version tower-http already links).
+flate2 = { version = "1.1" }
 
 # Faster dev rebuilds: line tables only for our code (backtraces still show file:line), no debug
 # info for dependencies. Cuts the debug binary from ~410 MB to ~100 MB and the one-file-edit

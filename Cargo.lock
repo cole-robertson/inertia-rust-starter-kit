@@ -2343,6 +2343,7 @@ dependencies = [
  "cookie",
  "cruet 1.0.0",
  "deunicode",
+ "flate2",
  "futures-util",
  "hex",
  "hmac 0.13.0",
