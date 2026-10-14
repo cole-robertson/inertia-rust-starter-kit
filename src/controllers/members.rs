@@ -9,7 +9,11 @@ use crate::{
     auth::CurrentAccount,
     controllers::{clock, NoPrecognition, Params},
     inertia::{lazy, redirect::Redirect, render::Inertia, Props},
-    models::{accounts, invitations, memberships, users::SaveError},
+    models::{
+        accounts, invitations,
+        memberships::{self, Role},
+        users::SaveError,
+    },
     route_table,
 };
 
@@ -92,6 +96,13 @@ async fn update(
     if !current.is_manager() {
         return Ok(current.forbidden(&headers));
     }
+    // An admin can't make an owner (themselves included) or touch an owner's membership:
+    // otherwise an admin could promote themselves, then demote or remove the real owners.
+    let owner_involved =
+        membership.role() == Role::Owner || Role::parse(&params.role) == Some(Role::Owner);
+    if owner_involved && !current.is_owner() {
+        return Ok(current.forbidden(&headers));
+    }
     let members = route_table::account_members_path(&current.account.slug);
     match membership.change_role(&ctx.db, &params.role).await {
         Ok(_) => Ok(Redirect::to(members).notice("Role updated").into_response()),
@@ -110,6 +121,10 @@ async fn destroy(
         memberships::Model::find_in_account(&ctx.db, current.account.id, path.id).await?;
     let leaving = membership.id == current.membership.id;
     if !leaving && !current.is_manager() {
+        return Ok(current.forbidden(&headers));
+    }
+    // Only an owner removes an owner (an owner leaving is the last-owner rule's business).
+    if !leaving && membership.role() == Role::Owner && !current.is_owner() {
         return Ok(current.forbidden(&headers));
     }
     let members = route_table::account_members_path(&current.account.slug);

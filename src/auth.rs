@@ -255,6 +255,12 @@ impl CurrentAccount {
         self.membership.is_manager()
     }
 
+    /// Only owners make owners or change or remove an owner's membership.
+    #[must_use]
+    pub fn is_owner(&self) -> bool {
+        self.membership.role() == memberships::Role::Owner
+    }
+
     /// `redirect_back_or_to account_path, alert: "You don't have permission to do that"`.
     #[must_use]
     pub fn forbidden(&self, headers: &axum::http::HeaderMap) -> Response {
