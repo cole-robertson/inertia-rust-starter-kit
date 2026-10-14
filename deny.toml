@@ -9,7 +9,13 @@ all-features = false
 version = 2
 yanked = "deny"
 # Add an advisory ID here only with a comment explaining why it does not affect this app.
-ignore = []
+ignore = [
+  # unsafe-libyaml is unmaintained (informational, no vulnerability). It comes in only through
+  # Loco itself (loco-gen -> rrgen -> serde_yaml, and loco-rs -> serde_yaml_ng), which parse
+  # the app's own config files and generator templates, never request data. Nothing to
+  # upgrade to until Loco drops serde_yaml.
+  { id = "RUSTSEC-2024-0449", reason = "unmaintained, informational; only reached via Loco's config/template YAML" },
+]
 
 [licenses]
 version = 2
