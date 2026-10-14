@@ -33,6 +33,7 @@ const COPY: &[&str] = &[
     "tests/rename.rs",
     "tests/routes_fresh.rs",
     "docs/BENCHMARK.md",
+    // The kit's website: an app deletes site/ (bin/rename says so), so it may be missing.
     "site/.vitepress/config.mts",
 ];
 
@@ -54,7 +55,10 @@ fn app_copy(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&root);
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
     for rel in COPY {
-        copy(&source.join(rel), &root.join(rel));
+        // An app that deleted the kit's site/ (as bin/rename tells it to) has no site config.
+        if source.join(rel).exists() {
+            copy(&source.join(rel), &root.join(rel));
+        }
     }
     root
 }
@@ -173,11 +177,14 @@ fn a_dry_run_reports_what_the_real_run_changes_and_changes_nothing() {
 fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
     let root = app_copy("real");
     let benchmark = read(&root, "docs/BENCHMARK.md");
-    let site_config = read(&root, "site/.vitepress/config.mts");
+    let site_config = root
+        .join("site")
+        .exists()
+        .then(|| read(&root, "site/.vitepress/config.mts"));
     let this_test = read(&root, "tests/rename.rs");
     let lock = read(&root, "Cargo.lock");
     let old_name = crate_name(&read(&root, "Cargo.toml"));
-    rename(&root, &["acme-crm", "Acme CRM"]);
+    let out = rename(&root, &["acme-crm", "Acme CRM"]);
 
     let cargo = read(&root, "Cargo.toml");
     assert!(cargo.contains("name = \"acme_crm\""));
@@ -255,11 +262,17 @@ fn rename_changes_every_app_identifier_and_keeps_credits_and_history() {
         benchmark,
         "docs/ is history"
     );
-    assert_eq!(
-        read(&root, "site/.vitepress/config.mts"),
-        site_config,
-        "site/ is the kit's website, not the app's: rename leaves it alone"
-    );
+    if let Some(site_config) = site_config {
+        assert_eq!(
+            read(&root, "site/.vitepress/config.mts"),
+            site_config,
+            "site/ is the kit's website, not the app's: rename leaves it alone"
+        );
+        assert!(
+            out.contains("git rm -r site .github/workflows/site.yml"),
+            "rename says to delete the kit's website and the workflow that builds it:\n{out}"
+        );
+    }
     assert_eq!(
         read(&root, "tests/rename.rs"),
         this_test,
@@ -382,6 +395,18 @@ fn invalid_names_are_refused_before_anything_changes() {
         assert!(!out.status.success(), "{args:?} was accepted");
     }
     assert_eq!(read(&root, "Cargo.toml"), before);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// An app that deleted the kit's website (`site/`, as bin/rename says to) renames the same, and
+/// isn't told to delete it again.
+#[test]
+fn renaming_an_app_without_the_kits_site_works_and_says_nothing_about_it() {
+    let root = app_copy("nosite");
+    let _ = std::fs::remove_dir_all(root.join("site"));
+    let out = rename(&root, &["acme-crm", "Acme CRM"]);
+    assert!(read(&root, "Cargo.toml").contains("name = \"acme_crm\""));
+    assert!(!out.contains("site.yml"), "{out}");
     std::fs::remove_dir_all(&root).unwrap();
 }
 

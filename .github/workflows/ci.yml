@@ -114,6 +114,13 @@ jobs:
           git diff --exit-code -- frontend/types/generated
           test -z "$(git ls-files --others --exclude-standard -- frontend/types/generated)"
 
+      # The SeaORM entities, from the migrations (`db migrate` + `db entities` in a temp copy).
+      - name: Install sea-orm-cli
+        run: sea-orm-cli --version 2>/dev/null | grep -q 2.0.4 || cargo install --locked sea-orm-cli@2.0.4
+
+      - name: Regenerate and compare src/models/_entities
+        run: cargo test --locked --test entities_fresh
+
   js:
     name: JavaScript (lint, format, types, build)
     runs-on: ubuntu-latest

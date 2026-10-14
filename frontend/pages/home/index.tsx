@@ -77,7 +77,7 @@ export default function Welcome() {
 
               <p
                 className="mb-4 flex min-h-5 items-center gap-1.5 text-[#706f6c] dark:text-[#A1A09A]"
-                data-testid="server-timing"
+                data-test="server-timing"
               >
                 {serverMs !== null && (
                   <>

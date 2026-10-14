@@ -5,8 +5,9 @@ import { type Page, expect } from "@playwright/test"
 const sink = `http://127.0.0.1:${process.env.MAIL_SINK_HTTP_PORT ?? 2526}`
 
 /**
- * The last message sent to `email` with `subject`, quoted-printable decoded (headers and
- * body). Polls: the app may still be handing the message to SMTP when the page has already
+ * The last message sent to `email` with `subject`, decoded: the headers unfolded and their
+ * RFC 2047 encoded words decoded (so `subject` may be non-ASCII), then quoted-printable
+ * (headers and body). Polls: the app may still be handing the message to SMTP when the page has already
  * moved on.
  */
 export async function lastMailTo(
@@ -39,9 +40,24 @@ export function linkIn(mail: string, path: string): string {
   return url![1].replaceAll("&amp;", "&")
 }
 
-// Undo quoted-printable soft breaks and =XX escapes.
+// Undo what lettre does to a message: unfold the headers (a long one continues on lines that
+// start with whitespace) and decode their RFC 2047 encoded words (a non-ASCII header, say a
+// subject with "·" or an accent, arrives as `=?utf-8?b?<base64>?=`, split into several words
+// when long; the whitespace between two adjacent words isn't text), then quoted-printable soft
+// breaks and =XX escapes.
 function decode(raw: string) {
-  return raw
+  const end = raw.search(/\r?\n\r?\n/)
+  const headers = (end < 0 ? raw : raw.slice(0, end))
+    .replace(/\r?\n([ \t])/g, "$1")
+    .replace(/\?=[ \t]+=\?/g, "?==?")
+    .replace(/(?:=\?utf-8\?b\?[A-Za-z0-9+/=]*\?=)+/gi, (run) =>
+      Buffer.concat(
+        [...run.matchAll(/=\?utf-8\?b\?([A-Za-z0-9+/=]*)\?=/gi)].map((word) =>
+          Buffer.from(word[1], "base64"),
+        ),
+      ).toString("utf8"),
+    )
+  return (headers + (end < 0 ? "" : raw.slice(end)))
     .replace(/=\r?\n/g, "")
     .replace(/=([0-9A-F]{2})/g, (_, hex: string) =>
       String.fromCharCode(parseInt(hex, 16)),

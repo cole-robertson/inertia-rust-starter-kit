@@ -87,5 +87,11 @@ async fn main() -> loco_rs::Result<()> {
             }
         }
     }
-    cli::main::<App, Migrator>().await
+    // `generate migration` leaves the schema and the entities as they were; say so.
+    let next_steps = generate::migration_next_steps(&args);
+    cli::main::<App, Migrator>().await?;
+    if let Some(next_steps) = next_steps {
+        println!("\n{next_steps}");
+    }
+    Ok(())
 }

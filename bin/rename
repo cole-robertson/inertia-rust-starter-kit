@@ -8,14 +8,15 @@
 # The crate name may be given as acme_crm or acme-crm; the crate and binary use acme_crm, the
 # Docker image and Cloudflare Worker use acme-crm. The current names are read from Cargo.toml,
 # config/development.yaml and deploy/cloudflare, so renaming twice works. docs/, bench/ and site/
-# are left alone (they describe the kit; site/ is the kit's website, so delete it from your app),
-# and so are links to the kit's GitHub repository.
+# are left alone (they describe the kit; site/ is the kit's website, so delete it and
+# .github/workflows/site.yml, which builds it, from your app), and so are links to the kit's
+# GitHub repository.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 usage() {
-  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 64
 }
 
@@ -227,5 +228,10 @@ if [ "$dry_run" = false ]; then
     fi
   fi
   echo "Next: cargo build && cargo test, then commit. Domains are yours to set: config/deploy.yml, and for Cloudflare deploy/cloudflare/.env.local (from .env.example)."
+  # The kit's website and the workflow that builds it; an app has no use for either.
+  if [ -d site ] || [ -f .github/workflows/site.yml ]; then
+    echo "note: site/ is the kit's website (inertia-rust.dev) and .github/workflows/site.yml builds it; delete both:"
+    echo "      git rm -r site .github/workflows/site.yml"
+  fi
   echo "Yours to edit too: SECURITY.md's advisory link (github.com/your-user/${new_kebab}), and the kit's Repository and Documentation links in frontend/components/app-header.tsx and app-sidebar.tsx."
 fi

@@ -407,6 +407,20 @@ fn generate_controller_writes_a_member_show_page_with_its_param() {
         "{controller}"
     );
 
+    // Any other name is a String param of that name (`show:token`, `/votes/{token}`), not just
+    // `slug`.
+    generate_controller(&root, "generate controller votes show:token --global").unwrap();
+    let table = read(&root, "src/route_table.rs");
+    assert!(table.contains("pub const VOTE: &str = \"/votes/{token}\";"));
+    assert!(table.contains("pub fn vote_path(token: &str) -> String"));
+    let controller = read(&root, "src/controllers/votes.rs");
+    assert!(
+        controller.contains("Path(token): Path<String>,"),
+        "{controller}"
+    );
+    assert!(read(&root, "tests/requests/votes.rs")
+        .contains("assert_eq!(page[\"props\"][\"token\"], \"a-b\");"));
+
     // A string param next to update/destroy (which take `{id}`) is refused, and so is a param
     // on anything but `show`.
     let err =

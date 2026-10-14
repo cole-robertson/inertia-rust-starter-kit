@@ -206,8 +206,11 @@ pub fn sid_from_mail(message: &str) -> String {
         .replace("%2E", ".")
 }
 
-/// Undo quoted-printable soft line breaks and `=XX` escapes (lettre encodes long lines).
+/// Undo what lettre does to a message: unfold the headers and decode their RFC 2047 encoded
+/// words ([`decode_headers`]), then quoted-printable soft line breaks and `=XX` escapes (lettre
+/// encodes long lines).
 pub fn decode_qp(message: &str) -> String {
+    let message = decode_headers(message);
     let joined = message.replace("=\r\n", "").replace("=\n", "");
     let bytes = joined.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -224,4 +227,36 @@ pub fn decode_qp(message: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The headers (up to the first blank line) unfolded, a long header's continuation lines start
+/// with whitespace, and their RFC 2047 encoded words decoded: lettre writes any non-ASCII header
+/// (a subject with "·" or an accent) as `=?utf-8?b?<base64>?=`, split into several words when
+/// long. The whitespace between two adjacent encoded words is not part of the text.
+pub fn decode_headers(message: &str) -> String {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use regex::{Captures, Regex};
+
+    let end = Regex::new(r"\r?\n\r?\n")
+        .unwrap()
+        .find(message)
+        .map_or(message.len(), |m| m.start());
+    let (headers, body) = message.split_at(end);
+    let unfolded = Regex::new(r"\r?\n([ \t])")
+        .unwrap()
+        .replace_all(headers, "$1");
+    let adjacent = Regex::new(r"\?=[ \t]+=\?")
+        .unwrap()
+        .replace_all(&unfolded, "?==?");
+    let word = Regex::new(r"(?i)=\?utf-8\?b\?([A-Za-z0-9+/=]*)\?=").unwrap();
+    let decoded = Regex::new(r"(?i)(?:=\?utf-8\?b\?[A-Za-z0-9+/=]*\?=)+")
+        .unwrap()
+        .replace_all(&adjacent, |run: &Captures| {
+            let bytes: Vec<u8> = word
+                .captures_iter(&run[0])
+                .flat_map(|w| STANDARD.decode(&w[1]).expect("base64 in an encoded word"))
+                .collect();
+            String::from_utf8_lossy(&bytes).into_owned()
+        });
+    format!("{decoded}{body}")
 }

@@ -76,6 +76,7 @@ no page test.
 ```sh
 cargo loco generate controller files show:id       # /{account_slug}/files/{id}, an i64
 cargo loco generate controller files show:slug     # /{account_slug}/files/{slug}, a String
+cargo loco generate controller files show:token    # any other name too: {token}, a String
 cargo loco generate controller files show:*path    # /{account_slug}/files/{*path}, a glob
 ```
 
@@ -87,6 +88,11 @@ keeps the slashes, and the TS route is Rails' `/:account_slug/files/*path`, whic
 fills the same way. Keep a glob the last segment. `show:id` can be generated with `update` and
 `destroy` (one `{id}` path); a String or glob param can't, since they take `{id}` at the same
 path. Look the record up in the account in `show` (another account's is a 404).
+
+The generated request test (`tests/requests/<name>.rs`) asserts every route the generator wrote,
+by its constant (`route_table::VOTES` for the `index` that comes with `show:token`). Remove a
+route you don't want and the next `cargo clippy --all-targets` fails in that test, not in the app:
+delete the test's assertions for that route too.
 
 To add a page to an existing controller, add the path and route to `src/route_table.rs` by
 hand (as the generator does), the handler and `.add(..)`, then rerun

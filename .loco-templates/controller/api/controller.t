@@ -69,7 +69,7 @@
 {%- if parts | length > 1 -%}
 {%- set raw = parts | last -%}
 {%- if nested or parts | first != "show" or parts | length > 2 or raw | trim_start_matches(pat="*") == "" -%}
-{{ throw(message="`" ~ action.name ~ "`: only a flat controller's `show` takes a param (`show:id`, `show:slug`, or a glob `show:*key` for the rest of the path), the member page at /" ~ name ~ "/{param}") }}
+{{ throw(message="`" ~ action.name ~ "`: only a flat controller's `show` takes a param (`show:id` an i64, any other name a String, e.g. `show:slug` or `show:token`, or a glob `show:*key` for the rest of the path), the member page at /" ~ name ~ "/{param}") }}
 {%- endif -%}
 {%- set_global show_glob = raw is starting_with("*") -%}
 {%- set_global show_param = raw | trim_start_matches(pat="*") -%}

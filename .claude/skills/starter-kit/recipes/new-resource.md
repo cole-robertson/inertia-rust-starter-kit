@@ -69,6 +69,10 @@ With `--global` the same files have the unscoped shape: `Authenticated`, `find_b
   link. The request test checks both (`a_parent_from_another_account_is_not_offered_…`).
 - Scope further (to the owner, to a project's members) by adding to the model's finders: the
   generated ones are scoped to the account and nothing more.
+- **Columns the app sets, not the user** (`last_status`, `last_error`, `synced_at` on a feed the
+  app polls) become params and form fields like any other, as in Rails. Leave them out of the
+  `generate` command and add them with `cargo loco generate migration` afterwards, or delete them
+  from `ProjectParams`/`assign` and `form.tsx` (keep them in `ProjectProps` if a page shows them).
 - Extra validations go in `ProjectParams::assign` (`errors.add("name", "is too long")`).
 - `to_props()` and `ProjectProps` decide what reaches the browser. The pages import the
   TypeScript type generated from that struct: after changing it, run
