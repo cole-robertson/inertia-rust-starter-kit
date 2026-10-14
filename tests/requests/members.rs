@@ -4,7 +4,7 @@
 
 use axum::http::StatusCode;
 use inertia_rust_starter_kit::{
-    models::{accounts, invitations, memberships},
+    models::{accounts, invitations, memberships, users},
     route_table,
 };
 use sea_orm::{EntityTrait, PaginatorTrait};
@@ -371,6 +371,77 @@ async fn an_owner_removes_a_member_and_a_member_leaves() {
         assert_redirect(&res, "/acme/members");
         let page = inertia_get(&server, &ctx, "/acme/members").await;
         assert_eq!(page["flash"]["notice"], "Member removed");
+    })
+    .await;
+}
+
+/// An admin manages members but not owners: they can't promote anyone (themselves included) to
+/// owner, nor demote or remove an owner. Without this an admin could make themselves owner, then
+/// demote or remove the real owner and take the account.
+#[tokio::test]
+#[serial]
+async fn an_admin_cannot_make_an_owner_or_demote_or_remove_one() {
+    with_app(|mut server, ctx| async move {
+        sign_in(&mut server, &ctx, ONE).await; // the owner of Acme makes two@ an admin
+        server
+            .patch(&format!("/acme/members/{TWO_IN_ACME}"))
+            .json(&json!({ "role": "admin" }))
+            .await;
+        assert_eq!(role_of(&ctx, TWO_IN_ACME).await.as_deref(), Some("admin"));
+
+        sign_in(&mut server, &ctx, TWO).await; // the admin
+        let attempts = [
+            (
+                "PATCH",
+                format!("/acme/members/{TWO_IN_ACME}"),
+                json!({ "role": "owner" }),
+            ),
+            (
+                "PATCH",
+                "/acme/members/1".to_owned(),
+                json!({ "role": "member" }),
+            ),
+            (
+                "PATCH",
+                "/acme/members/1".to_owned(),
+                json!({ "role": "admin" }),
+            ),
+            ("DELETE", "/acme/members/1".to_owned(), json!({})),
+        ];
+        for (method, path, body) in attempts {
+            let res = send(&server, method, &path, body).await;
+            assert_redirect(&res, "/acme");
+            let page = inertia_get(&server, &ctx, "/acme").await;
+            assert_eq!(
+                page["flash"]["alert"], "You don't have permission to do that",
+                "{method} {path}"
+            );
+        }
+        assert_eq!(role_of(&ctx, 1).await.as_deref(), Some("owner"));
+        assert_eq!(role_of(&ctx, TWO_IN_ACME).await.as_deref(), Some("admin"));
+
+        // An admin still manages plain members: a new member is promoted to admin.
+        let user = users::Model::sign_up(
+            &ctx.db,
+            &users::SignUpParams {
+                name: "Three".into(),
+                email: "three@example.com".into(),
+                password: "Secret1*3*5*".into(),
+                password_confirmation: Some("Secret1*3*5*".into()),
+            },
+        )
+        .await
+        .unwrap();
+        let three =
+            memberships::Model::find_or_create(&ctx.db, 1, user.id, memberships::Role::Member)
+                .await
+                .unwrap();
+        let res = server
+            .patch(&format!("/acme/members/{}", three.id))
+            .json(&json!({ "role": "admin" }))
+            .await;
+        assert_redirect(&res, "/acme/members");
+        assert_eq!(role_of(&ctx, three.id).await.as_deref(), Some("admin"));
     })
     .await;
 }

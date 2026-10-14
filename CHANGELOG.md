@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Security
+
+- **An admin could take over an account.** `PATCH /{account}/members/{id}` and `DELETE` only
+  checked for an owner *or admin*, and `role=owner` was accepted from either. So an admin
+  could promote themselves to owner, which made the real owner no longer the last one, then
+  demote or remove that owner. Now only an owner can make someone an owner or change or remove
+  an owner's membership; an admin trying either gets "You don't have permission to do that".
+  `CurrentAccount::is_owner` is new.
+  **Apps made from the kit:** copy the two guards in `src/controllers/members.rs` (`update` and
+  `destroy`) and `CurrentAccount::is_owner` from `src/auth.rs`; the regression test is
+  `an_admin_cannot_make_an_owner_or_demote_or_remove_one` in `tests/requests/members.rs`.
+
+### Changed
+
 Four ideas from inertia-omega (the Inertia team's Rust adapter) and inertia-laravel, ported
 into the kit's own Inertia layer:
 
