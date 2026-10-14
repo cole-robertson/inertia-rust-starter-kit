@@ -35,6 +35,14 @@ futures-util = { version = "0.3" }
 hex = { version = "0.4" }
 hmac = { version = "0.13" }
 include_dir = { version = "0.7" }
+# The Inertia.js protocol (props, page object, render, versioning, redirect rules): inertia-omega,
+# the Inertia team's Rust adapter. Imported as `omega` (its library name, `inertia`, is this crate's
+# own module). No default features: the kit has its own session (the encrypted flash cookie) and SSR
+# client. Pinned to the `kit` branch of a fork, which is upstream main plus these fixes, each open as
+# a pull request: cole-robertson/inertia-omega#1 (validator 0.20, Loco's), #2 (renders leave the
+# session unmodified), #3 (SSR failures don't log the page), #4 (docs), #5 (replaced responses keep
+# their cookies). It moves to crates.io once upstream publishes and has merged them.
+omega = { package = "inertia-omega", git = "https://github.com/cole-robertson/inertia-omega", rev = "06754a74f1887a7df1cb4dc0c702597cb61a98ed", default-features = false, features = ["axum"] }
 # Loco's generator engine (already linked in via loco-rs); `cargo loco task scaffold:pages` renders
 # .loco-templates/scaffold/pages/ with it, the same way `cargo loco generate` renders the rest.
 loco-gen = { version = "1.2" }
@@ -95,8 +103,6 @@ rstest = { version = "0.27" }
 axum-test = { version = "17.3" }
 # tests/db.rs reads SQLite's per-statement re-prepare counter (the version sqlx already links).
 libsqlite3-sys = { version = "0.37" }
-# Paused virtual time (`#[tokio::test(start_paused = true)]`) for the resolver's concurrency tests.
-tokio = { version = "1.45", features = ["test-util"] }
 # tests/requests/inertia_pages.rs decodes gzip responses (the version tower-http already links).
 flate2 = { version = "1.1" }
 

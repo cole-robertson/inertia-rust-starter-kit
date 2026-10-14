@@ -1,33 +1,48 @@
 # Inertia server adapter (`src/inertia/`): rendering, props, SSR, Vite
 
-This is a port of inertia-rails' Renderer, PropsResolver and SSR renderer for the Inertia.js v3 protocol.
+The Inertia.js v3 protocol itself (props and partial reloads, the page object, rendering JSON or
+the HTML document, asset versioning, the redirect rules) is [inertia-omega](https://github.com/inertiajs/inertia-omega),
+the Inertia team's Rust adapter, a port of inertia-laravel, imported as `omega`. Until it is on
+crates.io, `Cargo.toml` pins a fork's `kit` branch: upstream main plus a few fixes, each open as a
+pull request (listed in `Cargo.toml`). `src/inertia/` wires it into Loco and adds what the kit keeps
+from inertia-rails: Rails-style flash in the encrypted flash cookie (prefetches leave it alone),
+server-managed head tags, the kit's HTML document and SSR client, CSRF, the CSP nonce,
+Precognition, the external-redirect rule and the asset-version reload on `app_url`.
 Flash, redirects, CSRF and security headers are covered in [INERTIA_SECURITY.md](INERTIA_SECURITY.md).
 
 ## Rendering
 
 ```rust
-use crate::inertia::{Inertia, Props, defer, lazy};
+use crate::inertia::{defer, lazy, Inertia, Props};
 
 async fn show(inertia: Inertia) -> loco_rs::Result<Response> {
     inertia.render("Dashboard/Index", Props::new()
-        .prop("stats", lazy(|| async { Ok(json!({"n": 1})) }))
-        .prop("activity", defer(|| async { Ok(load_activity().await?) })))
+        .with("stats", lazy(|| async { Ok(json!({"n": 1})) }))
+        .with("activity", defer(|| async { Ok(load_activity().await?) })))
     .await
 }
 ```
 
-`Inertia` is an extractor. It needs `AppContext` as router state and `Arc<Settings>` in `shared_store`.
+`Inertia` is an extractor. It needs `AppContext` as router state, `Arc<Settings>` in
+`shared_store`, and the Inertia layer (`render::layer`, installed in `App::after_routes`).
 
-- If the request has `X-Inertia: true`, the response is the page as JSON and carries `X-Inertia: true`.
-- Any other request gets the HTML document from `document.rs`.
-- Both responses carry `Vary: X-Inertia`, return status 200, and set the `FlashConsumed` response extension so B's flash layer clears the cookie.
+`render` runs the shared props (below) and has omega resolve the page right away, in the handler:
+
+- If the request has `X-Inertia: true`, the response is the page as JSON (`application/json; charset=utf-8`) and carries `X-Inertia: true`.
+- Any other request gets the HTML document from `document.rs` (omega's root view).
+- Both responses carry `Vary: X-Inertia`.
+- A lazy prop's error is `render`'s error, as if the handler had returned it: a `NotFound` is a 404.
+
+omega would rather resolve a returned render later, in its layer (Laravel's `Responsable`). The
+kit doesn't: Loco's compression and ETag middlewares sit between that layer and the handler, and
+would see an empty body.
 
 The page object contains:
 
-- `component`, `props`, `url` (the original path and query), `version`, `encryptHistory` (`settings.encrypt_history`) and `clearHistory`.
-- `flash`: `{notice, alert}`, only when at least one is set.
+- `component`, `props`, `url` (the original path and query) and `version`.
 - `sharedProps`: the top-level shared keys, `errors` first (see below).
-- `preserveFragment`, only when true.
+- `flash`: `{notice, alert}`, only when at least one is set.
+- `encryptHistory` (`settings.encrypt_history`), `clearHistory` and `preserveFragment`, each only when true.
 - The metadata keys `deferredProps`, `scrollProps`, `mergeProps`, `prependProps`, `deepMergeProps`, `matchPropsOn`, `onceProps` and `rescuedProps`. Each is omitted when empty.
 
 ### The `errors` prop
@@ -35,55 +50,41 @@ The page object contains:
 `errors` is always present and always included, even in a partial reload that doesn't ask for it.
 
 - Its default value is `{}`.
-- The value comes from the flash errors that `Redirect::errors` stored.
-- When the request has `X-Inertia-Error-Bag`, or the flash stored an `error_bag`, the errors are nested under that bag name.
-- It is a shared prop, as in inertia-rails' `inertia_shared_data` with `always_include_errors_hash = true`: the errors hash is the base the app's shared props merge onto, so `sharedProps` always starts with `"errors"`.
+- The value comes from the errors a `Redirect::errors` carried to this request: every message per field (`{"name": ["can't be blank"]}`, omega's `with_all_errors`), the shape the frontend reads.
+- When the request has `X-Inertia-Error-Bag`, or the redirect set an `error_bag`, the errors are nested under that bag name.
+- It is a shared prop, so `sharedProps` always starts with `"errors"`.
 
 ## Props
 
+Props are omega's `Props` and `Prop` (`src/inertia/props.rs` re-exports them). Build them with
+`Props::new().with(key, value)`; a value is anything `Serialize` (a `json!`, a typed props
+struct) or a `Prop`. The lazy constructors take closures returning Loco's `Result`, as handlers do.
+
 | Builder | Ruby | First visit | Partial reload |
 |---|---|---|---|
-| `Prop::value(v)` / any `Into<Value>` | plain | sent | sent if selected |
-| `lazy(|| async { .. })` | `-> { }` | evaluated + sent | evaluated only if selected |
-| `always(..)` / `.always()` | `InertiaRails.always` | sent | always sent |
+| any `Serialize` / `Prop::value(v)` | plain | sent | sent if selected |
+| `lazy(|| async { Ok(..) })` | `-> { }` | evaluated + sent | evaluated only if selected |
+| `always(v)` / `.always()` | `InertiaRails.always` | sent | always sent |
 | `optional(..)` / `.optional()` | `InertiaRails.optional` | not sent | sent if selected |
-| `defer(..)` / `.defer()` / `.group("g")` | `InertiaRails.defer(group:)` | listed in `deferredProps` | sent if selected |
-| `merge(..)` / `.merge()` / `.prepend()` / `.append_at(p)` / `.prepend_at(p)` / `.match_on(f)` | `InertiaRails.merge` | `mergeProps` / `prependProps` / `matchPropsOn` | same (unless in `X-Inertia-Reset`) |
-| `deep_merge(..)` / `.deep_merge()` | `InertiaRails.deep_merge` | `deepMergeProps` | same |
-| `once(..)` / `.once()` / `.once_key(k)` / `.expires_at(ms)` / `.expires_in(d)` / `.fresh()` | `InertiaRails.once` | `onceProps`; skipped if in `X-Inertia-Except-Once-Props` | sent anyway when explicitly requested |
-| `scroll(ScrollMetadata, ..)` / `.wrapper("data")` | `InertiaRails.scroll` | `scrollProps` + merge at the wrapper (a deferred one: `mergeProps: ["users"]` until loaded, see below) | `X-Inertia-Infinite-Scroll-Merge-Intent: prepend` prepends; `X-Inertia-Reset` sets `reset: true` |
+| `defer(..)` / `.deferred()` / `.group("g")` | `InertiaRails.defer(group:)` | listed in `deferredProps` | sent if selected |
+| `merge(v)` / `.merge()` / `.prepend()` / `.append_at(p)` / `.prepend_at(p)` / `.match_on(f)` | `InertiaRails.merge` | `mergeProps` / `prependProps` / `matchPropsOn` | same (unless in `X-Inertia-Reset`) |
+| `deep_merge(v)` / `.deep_merge()` | `InertiaRails.deep_merge` | `deepMergeProps` | same |
+| `once(..)` / `.once()` / `.once_as(k)` / `.until(duration)` / `.fresh()` | `InertiaRails.once` | `onceProps`; skipped if in `X-Inertia-Except-Once-Props` | sent anyway when explicitly requested |
+| `scroll(paginator)` / `scroll_with(|| async { paginator })` / `.wrapper("data")` | `InertiaRails.scroll` | `scrollProps` + merge at the wrapper | `X-Inertia-Infinite-Scroll-Merge-Intent: prepend` prepends; `X-Inertia-Reset` sets `reset: true` |
 | `.rescue()` | `rescue: true` | a failure is logged and listed in `rescuedProps` instead of failing the render | same |
 
-A lazy closure is `FnOnce() -> impl Future<Output = Result<impl Serialize>>`. It runs at most once, and only when the prop is kept.
-
-**Kept lazy props run concurrently**, siblings and nested levels alike (an idea from inertia-omega's resolver; inertia-rails and inertia-laravel run them one by one). Three 100 ms props cost about 100 ms, not 300 ms. The page is still built in prop order: the keys of `props` and every metadata list (`deferredProps`, `mergeProps`, `onceProps`, `rescuedProps`, ...) come out exactly as a sequential pass would produce them. When several props fail, the error is the first failing one in prop order. Because they are polled together on one task, closures that share a resource still contend for it: in the kit's default test config (`max_connections: 1`) two database-backed props simply take turns on the one connection.
-
-A scroll prop's merge intent is applied when the prop is resolved, as in inertia-laravel (`resolveValue` → `configureMergeIntent`) and inertia-omega. So a **deferred** scroll prop with `.wrapper("data")` reports `mergeProps: ["users"]` on the first visit, where it is only listed, and `mergeProps: ["users.data"]` (or `prependProps`) on the partial reload that loads it. (inertia-rails collects the metadata before `ScrollProp#call`, so it reports `users` on every visit, a non-deferred scroll prop's first visit and that reload included.)
-
-### Closures returning props, arrays of props
-
-These cover the reference resolver's recursive cases (`props_resolver.rb#deep_transform_props` / `transform_array`):
-
-- `lazy_prop(|| async { Ok(..) })` is a Ruby `-> { }` whose result is a prop tree rather than JSON. It can return:
-  - a prop wrapper (`defer(..)`, `merge(..)`, `once(..)`, ...). The wrapper is unwrapped once: its metadata is collected at the closure's path and its inclusion rules apply, so a closure returning `defer(..)` is listed in `deferredProps` and is not evaluated on the first visit;
-  - `Props`, whose children may be wrappers (their paths are `parent.child`);
-  - `Vec<Props>` / `Vec<Prop>`, an array (see below).
-  A tree returned by a closure is resolved as an already-resolved parent: it is not filtered again by partial-reload keys, as in Ruby.
-- `Prop::array(items)` (or `Vec<Props>` / `Vec<Prop>` via `Into<Prop>`) is an array whose items may hold wrappers. Map items resolve at the indexed path `foos.0.bar`, so `X-Inertia-Partial-Data: foos.0.bar` selects one item's field, while `foos.bar` matches nothing. Items that end up empty are dropped. Other items are evaluated. An array holding no wrapper or closure anywhere (Rails' `needs_transform?`) is left intact, exactly as the same data would be through `Prop::value`: empty objects are kept and partial reloads filter it the same way.
-- `.rescue()` on a prop inside such a tree reports the full dot path in `rescuedProps`.
-
-### Dot notation
-
-`"a.b"` keys expand like `props_resolver.rb#expand_dot_notation`, before resolving:
-
-- A non-dotted key whose existing and new values are both plain objects (a JSON object or a nested `Props`) is shallow-merged, so `"user.name"` then `"user": {..}`, and the reverse order, both keep every key.
-- Walking a dotted key, a missing (or `null`/`false`) parent becomes an empty map. A plain-object parent is extended. A plain `lazy(..)` parent (a Ruby `-> { }`) is evaluated right then and extended.
-- A parent that can't hold children (a scalar, an array, or a modified prop such as `defer(..)`) makes the render fail, where Ruby raises.
+A lazy closure is `FnOnce() -> impl Future<Output = Result<impl Serialize>>`. It runs at most once,
+and only when the prop is kept. **Sibling closures run concurrently** (omega's resolver), so
+independent queries overlap; the page and its metadata lists are still in prop order. `scroll`
+takes omega's `Paginator` (or any `ProvidesScrollMetadata + Serialize`). A scroll prop's merge
+intent is applied when it is resolved, as in inertia-laravel: a **deferred** scroll prop with
+`.wrapper("data")` reports `mergeProps: ["users"]` on the first visit, where it is only listed,
+and `["users.data"]` (or `prependProps`) on the partial reload that loads it.
 
 ### Keys and partial reloads
 
-- Keys can use dot notation (`"auth.user"`), and a `Props` value can be nested inside another `Props`.
-- `X-Inertia-Partial-Data` and `X-Inertia-Partial-Except` follow the dot-path rules of `props_resolver.rb`. A key selects its ancestors and all of its descendants, and filtering reaches inside plain JSON objects too.
+- Keys can use dot notation (`"auth.user"`), and a `Props` value can be nested inside another `Props`, with behaviour of its own.
+- `X-Inertia-Partial-Data` and `X-Inertia-Partial-Except` select dot paths in both directions: a key selects its ancestors and all of its descendants, and filtering reaches inside plain JSON objects too.
 - These headers only apply when `X-Inertia-Partial-Component` matches the component being rendered.
 
 ## Shared props
@@ -91,15 +92,15 @@ These cover the reference resolver's recursive cases (`props_resolver.rb#deep_tr
 Register a `SharedProps(SharedPropsFn)` in `ctx.shared_store`:
 
 ```rust
-let f: SharedPropsFn = Arc::new(|parts, _ctx| Box::pin(async move { Ok(Props::new().prop("auth", ..)) }));
+let f: SharedPropsFn = Arc::new(|parts, _ctx| Box::pin(async move { Ok(Props::new().with("auth", ..)) }));
 ctx.shared_store.insert(SharedProps(f));
 ```
 
-- It runs on every render.
+- It runs when a page renders (not on redirects or JSON endpoints), with the request parts and the `AppContext`, and hands each prop to omega's `share`.
 - Page props override shared props key by key (a shallow merge).
 - The top-level keys of the shared props, after `errors`, are reported in `sharedProps`.
 
-This kit registers `auth` in `src/auth.rs`.
+This kit registers `auth` and `accounts` in `src/auth.rs`.
 
 ## Head tags (`meta.rs`, inertia-rails `server_head`)
 
@@ -136,7 +137,7 @@ inertia
 
 ## HTML document
 
-`document.rs` mirrors the Rails kit's `layouts/application.html.erb`. It contains:
+`document.rs` is omega's root view, and mirrors the Rails kit's `layouts/application.html.erb`. It contains:
 
 - `<title data-inertia>`
 - the viewport and app meta tags
@@ -149,7 +150,7 @@ Without SSR, the body is `<script data-page="app" type="application/json" nonce=
 
 The page JSON is made safe for a script context: `<`, `>`, `&`, U+2028 and U+2029 are escaped to `\uXXXX`.
 
-The nonce comes from B's `CspNonce` request extension. If that extension is missing, no nonce attribute is written.
+The nonce comes from the headers layer's `CspNonce` request extension, which `Inertia::render` passes to the document as view data. If that extension is missing, no nonce attribute is written.
 
 ## Vite
 
@@ -169,11 +170,14 @@ A missing manifest:
 - In production it is a boot error.
 - In other environments the app logs a warning and renders pages without asset tags.
 
-## Asset versioning (`version.rs`)
+## Asset versioning
 
-`version::layer` returns `409` with `X-Inertia-Location: {app_url}{original path+query}` for an Inertia `GET` whose `X-Inertia-Version` differs from the current version. The client then does a full page load.
+omega answers an Inertia `GET` whose `X-Inertia-Version` differs from the current version (the Vite
+version above) with `409` and `X-Inertia-Version`. The Inertia layer sets its
+`X-Inertia-Location` to `{app_url}{original path+query}` (or the extra host the request came in
+on), never to the request's own `Host`. The client then does a full page load.
 
-B's flash layer keeps the flash on 409 responses.
+The flash waits for the next render: a 409 renders nothing, so it leaves the flash cookie alone.
 
 ## Prefetch requests
 
@@ -185,6 +189,9 @@ B's flash layer keeps the flash on 409 responses.
 ## SSR (`ssr.rs`)
 
 `settings.ssr.enabled` switches SSR on for HTML responses. Inertia JSON visits never call the SSR server.
+The kit's `SsrClient` is omega's SSR gateway (`omega::ssr::Gateway`); it is kept instead of omega's
+`HttpGateway` for the dev-server switch below and for its logging, which never includes the
+response body.
 
 - **Dev** (`vite.dev_server`): the page is POSTed to `{vite.dev_server_url}/__inertia_ssr`, which the `@inertiajs/vite` plugin serves.
 - **Prod**: the page is POSTed to `settings.ssr.url`, which defaults to `http://127.0.0.1:13714/render`.

@@ -141,16 +141,17 @@ the redirect) and by reading both sources.
 | `auth` shared prop `{user: {id,name,email,verified,created_at,updated_at}, session: {id}}` | R:inertia_controller.rb:5 | K:auth.rs:114 | same keys | |
 | `auth.session.id` / `sessions[].id` type | integer | string (the session's random token) | **intentional** (brief): the id is never guessable and a cookie never carries the integer id | no (allowed) |
 | timestamp format (`created_at`, `updated_at`) | `2026-09-29T16:15:24.391Z` (UTC, milliseconds, `Z`) | `2026-09-29T16:15:24Z` or `…24.123456789Z`, depending on the value | differs → fixed: serialized like Rails' `as_json` (UTC, 3 fraction digits, `Z`) | yes |
-| `errors` always present (`always_include_errors_hash`) | R:config/initializers/inertia_rails.rb | K:inertia/render.rs:150 | same | |
+| `errors` always present (`always_include_errors_hash`) | R:config/initializers/inertia_rails.rb | inertia-omega (shared `errors`, always included) | same | |
 | `sharedProps` key list | `["errors","auth"]` | same | same | |
 | `encryptHistory` in production | true | true | same | |
 | `clearHistory` on sign-out and delete | true | true | same | |
+| `clearHistory` on every other page | `false` | left out (inertia-omega, like inertia-laravel, sends it only when true) | intentional: the client only acts on `true` | no (allowed) |
 | `flash` top-level page key (`notice`/`alert`) | inertia_rails flash_keys | K:inertia/flash.rs | same | |
 | `_inertia_meta` prop on home and dashboard (title + description) | none: the pages set their `<title>` with `<Head>` | K:home.rs, dashboard.rs | differs → fixed: removed. It was added to exercise the meta-tag API, but the pages already set the same titles with `<Head>`, and the extra `<title inertia>` and `<meta name="description">` changed the HTML head. The meta API stays (`src/inertia/meta.rs`, `tests/inertia_a.rs`); e2e/head.spec.ts now checks the Rails head and titles | yes |
-| lazy props resolve concurrently (siblings and nested levels), page and metadata still in prop order | `props_resolver.rb` evaluates them one by one | K:inertia/resolver.rs `resolve` | extra (from inertia-omega): the same page object, sooner (the members page's `members` and `invitations` now load together). Only timing changes, so no oracle step does | |
-| an Inertia redirect (201/301/302/303/307/308) to a URL with `#fragment` → 409 + `X-Inertia-Redirect` (not for prefetches) | none: fetch follows the redirect and drops the fragment | K:inertia/redirect.rs | extra (inertia-laravel `Middleware#handle`, inertia-omega `protocol::after`). No kit route redirects to a fragment, so no oracle step changes | |
+| lazy props resolve concurrently (siblings and nested levels), page and metadata still in prop order | `props_resolver.rb` evaluates them one by one | inertia-omega's resolver | extra: the same page object, sooner (the members page's `members` and `invitations` now load together). Only timing changes, so no oracle step does | |
+| an Inertia redirect (201/301/302/303/307/308) to a URL with `#fragment` → 409 + `X-Inertia-Redirect` (not for prefetches) | none: fetch follows the redirect and drops the fragment | inertia-omega `protocol::after` | extra (inertia-laravel `Middleware#handle`). No kit route redirects to a fragment, so no oracle step changes | |
 | a prefetch (`Purpose`/`Sec-Purpose`/`X-Moz: prefetch`) leaves the `_flash` cookie alone: it shows no flash, doesn't consume it and doesn't write one | a prefetch reads (and so consumes) the flash like any visit | K:inertia/flash.rs | extra: the kit's own `<Link prefetch>` links would otherwise eat a flash before the visit shows it. The oracle sends no prefetch requests | |
-| a deferred scroll prop with a wrapper: `mergeProps` on the first visit | `["users"]` (`collect_metadata` runs before `ScrollProp#call` sets the wrapper path) | `["users"]` (was `["users.data"]`) | differs → fixed. On the partial reload that loads it the kit reports `users.data`, as inertia-laravel and inertia-omega do; inertia-rails reports `users` on every visit (a non-deferred one too), where inertia-laravel, inertia-omega and the kit report `users.data` once the prop is resolved. No page of either kit uses scroll props, so the oracle can't see it | yes |
+| a deferred scroll prop with a wrapper: `mergeProps` on the first visit | `["users"]` (`collect_metadata` runs before `ScrollProp#call` sets the wrapper path) | `["users"]` (inertia-omega; was `["users.data"]`) | differs → fixed. On the partial reload that loads it the kit reports `users.data`, as inertia-laravel and inertia-omega do; inertia-rails reports `users` on every visit (a non-deferred one too), where inertia-laravel, inertia-omega and the kit report `users.data` once the prop is resolved. No page of either kit uses scroll props, so the oracle can't see it | yes |
 
 ### Models
 
@@ -250,6 +251,7 @@ primitives, `application.css` and `types/globals.d.ts`.
 | `etag` on pages | weak ETag (Rack::ETag) | none | intentional: pages carry per-request CSRF cookies and are `private, must-revalidate`; Rack::ETag renders the whole page before it can answer 304 | no (allowed) |
 | `content-type` of Inertia JSON and redirects | `application/json; charset=utf-8`; redirects `text/html; charset=utf-8` | K:render.rs, redirect.rs | differs → fixed | yes |
 | `vary: accept-encoding` | none (Thruster compresses in front of Rails) | Loco's compression layer | intentional: compression happens in the app here | no (allowed) |
+| `vary: X-Inertia` on redirects, 404s, public files | only on Inertia renders | every response (inertia-omega's layer, as inertia-laravel's middleware) | intentional: harmless for caches, these responses don't vary by it | no (allowed) |
 | `server-timing` | dev only | every GET | extra (home page badge) | |
 
 ### Config and DX
@@ -336,8 +338,9 @@ differences.
 
 Four Inertia-layer rows were added later (2026-10-06, ideas from inertia-omega and
 inertia-laravel): one fixed (deferred scroll `mergeProps`) and three extra (concurrent lazy props,
-fragment redirects, prefetches leave the flash alone). None of them shows up in the oracle's 124
-steps, so `allowed.json` is unchanged; the oracle was not re-run for them.
+fragment redirects, prefetches leave the flash alone). Three of them now come from inertia-omega
+itself; the prefetch rule is the kit's, in its flash layer. None of them shows up in the oracle's
+124 steps, so they changed nothing in `allowed.json`.
 
 The oracle, with production builds of both kits on one machine, 124 steps:
 
@@ -368,3 +371,9 @@ security improvements over the Rails kit. That run reported **0 unexpected, 63 a
 kit's own name and placeholder icon (2026-10-04) added two more (18 in all): the `<title>` on the
 four HTML pages and the two icon files. Re-run on the same workstation that day: **0 unexpected, 267
 allowed**, 0 stale.
+
+Moving the Inertia protocol to inertia-omega (2026-10-06) changed two things on the wire, both
+inertia-laravel's behaviour where inertia-rails differs: `clearHistory` is left out unless it is
+true (one new allowlist entry, 19 in all), and `Vary: X-Inertia` is on every response (the
+existing `vary` entry covers it). `onceProps` entries now carry `"expiresAt": null` (inside the
+already-allowed organizations entry). Re-run on one build machine: **0 unexpected, 350 allowed**, 0 stale.

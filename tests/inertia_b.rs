@@ -9,15 +9,16 @@ use axum::{
     http::{header, HeaderMap, Method, Request, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Json, Router,
+    Router,
 };
 use inertia_rust_starter_kit::inertia::{
     config::{self, Settings},
     cookies, csrf,
-    flash::{self, FlashConsumed, FlashState, IncomingFlash, OutgoingFlash},
+    flash::{self, FlashState, OutgoingFlash},
     headers::{self, CspNonce},
     precognition,
     redirect::{self, Redirect},
+    render, vite,
 };
 use serde_json::{json, Value};
 use serial_test::serial;
@@ -73,6 +74,33 @@ fn cookie_value(set_cookie: &str) -> String {
     pair(set_cookie).split_once('=').unwrap().1.to_owned()
 }
 
+/// `router` behind the app's Inertia layer and, outside it, the flash cookie layer (as in
+/// `App::after_routes`).
+fn inertia_layers(router: Router, settings: Arc<Settings>) -> Router {
+    flash::layer(render::layer(router, settings.clone()), settings)
+}
+
+/// An Inertia visit, running the current assets.
+fn inertia(method: Method, path: &str) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(path)
+        .header("x-inertia", "true")
+        .header(
+            "x-inertia-version",
+            vite::shared(&settings().vite).version(),
+        )
+        .header(header::HOST, "localhost:5150")
+        .body(Body::empty())
+        .unwrap()
+}
+
+fn with_cookie(mut req: Request<Body>, cookie: &str) -> Request<Body> {
+    req.headers_mut()
+        .insert(header::COOKIE, cookie.parse().unwrap());
+    req
+}
+
 // ---------------------------------------------------------------- flash
 
 fn flash_app() -> Router {
@@ -90,32 +118,11 @@ fn flash_app() -> Router {
         )
         .route(
             "/show",
-            get(
-                |Extension(IncomingFlash(f)): Extension<IncomingFlash>| async move {
-                    let mut res = Json((*f).clone()).into_response();
-                    res.extensions_mut().insert(FlashConsumed);
-                    res
-                },
-            ),
+            get(|inertia: omega::Inertia| async move { inertia.render("Show", ()) }),
         )
-        .route(
-            "/bounce",
-            get(|| async {
-                let mut res = Redirect::to("/show").into_response();
-                res.extensions_mut().insert(FlashConsumed);
-                res
-            }),
-        )
-        .route(
-            "/stale",
-            get(|| async {
-                let mut res = StatusCode::CONFLICT.into_response();
-                res.extensions_mut().insert(FlashConsumed);
-                res
-            }),
-        )
+        .route("/bounce", get(|| async { Redirect::to("/show") }))
         .route("/peek", get(|| async { "no render" }));
-    flash::layer(router, settings())
+    inertia_layers(router, settings())
 }
 
 async fn flash_cookie_after_set(app: &Router) -> String {
@@ -141,14 +148,7 @@ async fn flash_roundtrips_through_the_encrypted_cookie_and_is_removed_after_rend
     let app = flash_app();
     let cookie = flash_cookie_after_set(&app).await;
 
-    let res = send(
-        &app,
-        Request::get("/show")
-            .header(header::COOKIE, &cookie)
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
+    let res = send(&app, with_cookie(inertia(Method::GET, "/show"), &cookie)).await;
     let removal = set_cookie(&set_cookies(&res), "_flash")
         .expect("render deletes _flash")
         .clone();
@@ -156,38 +156,92 @@ async fn flash_roundtrips_through_the_encrypted_cookie_and_is_removed_after_rend
         removal.contains("Max-Age=0") || removal.contains("Expires"),
         "{removal}"
     );
-    let got: FlashState = serde_json::from_str(&body_string(res).await).unwrap();
+    let page: Value = serde_json::from_str(&body_string(res).await).unwrap();
+    assert_eq!(page["flash"], json!({"notice": "Saved"}));
     assert_eq!(
-        got,
-        FlashState {
-            notice: Some("Saved".into()),
-            alert: None,
-            errors: Some(json!({"email": ["is invalid"]})),
-            error_bag: Some("login".into()),
-            clear_history: true,
-            preserve_fragment: true,
-        }
+        page["props"]["errors"],
+        json!({"login": {"email": ["is invalid"]}})
     );
+    assert_eq!(page["clearHistory"], true);
+    assert_eq!(page["preserveFragment"], true);
 }
 
 #[tokio::test]
 async fn flash_survives_redirects_409s_and_non_rendering_responses() {
     let app = flash_app();
     let cookie = flash_cookie_after_set(&app).await;
-    for path in ["/bounce", "/stale", "/peek"] {
-        let res = send(
-            &app,
-            Request::get(path)
-                .header(header::COOKIE, &cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+    let mut stale = with_cookie(inertia(Method::GET, "/show"), &cookie);
+    stale
+        .headers_mut()
+        .insert("x-inertia-version", "old".parse().unwrap());
+    for (label, req) in [
+        (
+            "redirect",
+            with_cookie(inertia(Method::GET, "/bounce"), &cookie),
+        ),
+        ("asset version 409", stale),
+        (
+            "plain response",
+            with_cookie(inertia(Method::GET, "/peek"), &cookie),
+        ),
+    ] {
+        let res = send(&app, req).await;
         assert!(
             set_cookie(&set_cookies(&res), "_flash").is_none(),
-            "{path} must keep the flash cookie"
+            "{label} must keep the flash cookie"
         );
     }
+    let res = send(&app, with_cookie(inertia(Method::GET, "/show"), &cookie)).await;
+    let page: Value = serde_json::from_str(&body_string(res).await).unwrap();
+    assert_eq!(page["flash"], json!({"notice": "Saved"}), "still delivered");
+}
+
+#[tokio::test]
+async fn a_second_redirect_with_flash_replaces_the_first_ones_flash() {
+    // Two redirects with a flash and no page in between (e.g. a form posted twice, or a handler
+    // that redirects to another redirecting action): the next page shows the newest flash only,
+    // as the cookie held just the last redirect's flash before (Rails' flash: one `flash[:notice]`).
+    let router = Router::new()
+        .route(
+            "/first",
+            post(|| async { Redirect::to("/show").notice("First") }),
+        )
+        .route(
+            "/second",
+            post(|| async {
+                Redirect::to("/show")
+                    .alert("Second")
+                    .errors(json!({"name": ["is taken"]}))
+            }),
+        )
+        .route(
+            "/show",
+            get(|inertia: omega::Inertia| async move { inertia.render("Show", ()) }),
+        );
+    let app = inertia_layers(router, settings());
+
+    let res = send(&app, Request::post("/first").body(Body::empty()).unwrap()).await;
+    let first = pair(set_cookie(&set_cookies(&res), "_flash").unwrap());
+    let res = send(
+        &app,
+        with_cookie(
+            Request::post("/second").body(Body::empty()).unwrap(),
+            &first,
+        ),
+    )
+    .await;
+    let second = pair(set_cookie(&set_cookies(&res), "_flash").unwrap());
+
+    let res = send(&app, with_cookie(inertia(Method::GET, "/show"), &second)).await;
+    let page: Value = serde_json::from_str(&body_string(res).await).unwrap();
+    assert_eq!(page["flash"], json!({"alert": "Second"}));
+    assert_eq!(page["props"]["errors"], json!({"name": ["is taken"]}));
+}
+
+#[tokio::test]
+async fn a_render_with_no_flash_leaves_the_cookies_alone() {
+    let res = send(&flash_app(), inertia(Method::GET, "/show")).await;
+    assert!(set_cookies(&res).is_empty(), "{:?}", set_cookies(&res));
 }
 
 #[tokio::test]
@@ -195,15 +249,13 @@ async fn tampered_flash_cookie_is_ignored_and_deleted() {
     let app = flash_app();
     let res = send(
         &app,
-        Request::get("/show")
-            .header(header::COOKIE, "_flash=forged")
-            .body(Body::empty())
-            .unwrap(),
+        with_cookie(inertia(Method::GET, "/show"), "_flash=forged"),
     )
     .await;
     assert!(set_cookie(&set_cookies(&res), "_flash").is_some());
-    let got: FlashState = serde_json::from_str(&body_string(res).await).unwrap();
-    assert!(got.is_empty());
+    let page: Value = serde_json::from_str(&body_string(res).await).unwrap();
+    assert!(page.get("flash").is_none());
+    assert_eq!(page["props"]["errors"], json!({}));
 }
 
 #[tokio::test]
@@ -220,7 +272,7 @@ async fn outgoing_flash_from_a_handler_is_written() {
         }),
     );
     let res = send(
-        &flash::layer(router, settings()),
+        &inertia_layers(router, settings()),
         Request::get("/").body(Body::empty()).unwrap(),
     )
     .await;
@@ -282,21 +334,11 @@ fn redirect_app() -> Router {
         )
         .route(
             "/loc",
-            get(|headers: HeaderMap| async move {
-                redirect::location(&headers, "https://stripe.com/pay")
-            }),
+            get(
+                |inertia: omega::Inertia| async move { inertia.location("https://stripe.com/pay") },
+            ),
         );
-    redirect::layer(router, settings())
-}
-
-fn inertia(method: Method, path: &str) -> Request<Body> {
-    Request::builder()
-        .method(method)
-        .uri(path)
-        .header("x-inertia", "true")
-        .header(header::HOST, "localhost:5150")
-        .body(Body::empty())
-        .unwrap()
+    inertia_layers(router, settings())
 }
 
 #[tokio::test]
@@ -362,7 +404,7 @@ async fn same_origin_absolute_redirects_stay_redirects() {
 }
 
 #[tokio::test]
-async fn location_helper_is_409_for_inertia_and_302_otherwise() {
+async fn location_is_409_for_inertia_and_302_otherwise() {
     let app = redirect_app();
     let res = send(&app, inertia(Method::GET, "/loc")).await;
     assert_eq!(res.status(), StatusCode::CONFLICT);
@@ -476,14 +518,16 @@ fn is_external_resolves_relative_locations_against_app_url() {
 
 #[tokio::test]
 async fn scheme_relative_redirect_on_inertia_request_becomes_409() {
-    let app = redirect::layer(
+    let settings = settings_with("https://app.example", false, false);
+    let app = inertia_layers(
         Router::new().route("/r", get(|| async { Redirect::to("//evil.example/phish") })),
-        settings_with("https://app.example", false, false),
+        settings.clone(),
     );
     let res = send(
         &app,
         Request::get("/r")
             .header("x-inertia", "true")
+            .header("x-inertia-version", vite::shared(&settings.vite).version())
             .header(header::HOST, "app.example")
             .body(Body::empty())
             .unwrap(),
@@ -510,7 +554,7 @@ fn fragment_app() -> Router {
         )
         .post(|| async { Redirect::to("/article#section") }),
     );
-    flash::layer(redirect::layer(router, settings()), settings())
+    inertia_layers(router, settings())
 }
 
 // inertia-laravel MiddlewareTest: test_redirect_with_hash_fragment_*.
@@ -580,36 +624,25 @@ async fn a_prefetch_neither_shows_nor_consumes_nor_writes_the_flash() {
 
     // Prefetching the page the flash is meant for: it sees no flash and the
     // cookie stays.
-    let res = send(
-        &app,
-        Request::get("/show")
-            .header(header::COOKIE, &cookie)
-            .header("purpose", "prefetch")
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
+    let mut prefetch = with_cookie(inertia(Method::GET, "/show"), &cookie);
+    prefetch
+        .headers_mut()
+        .insert("purpose", "prefetch".parse().unwrap());
+    let res = send(&app, prefetch).await;
     assert!(
         set_cookie(&set_cookies(&res), "_flash").is_none(),
         "a prefetch must not delete the flash"
     );
-    let got: FlashState = serde_json::from_str(&body_string(res).await).unwrap();
+    let page: Value = serde_json::from_str(&body_string(res).await).unwrap();
     assert!(
-        got.is_empty(),
-        "a prefetch must not show the flash: {got:?}"
+        page.get("flash").is_none(),
+        "a prefetch must not show the flash: {page}"
     );
 
     // The real visit still gets it.
-    let res = send(
-        &app,
-        Request::get("/show")
-            .header(header::COOKIE, &cookie)
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    let got: FlashState = serde_json::from_str(&body_string(res).await).unwrap();
-    assert_eq!(got.notice.as_deref(), Some("Saved"));
+    let res = send(&app, with_cookie(inertia(Method::GET, "/show"), &cookie)).await;
+    let page: Value = serde_json::from_str(&body_string(res).await).unwrap();
+    assert_eq!(page["flash"], json!({"notice": "Saved"}));
 
     // A prefetch that answers with a flash-carrying redirect does not
     // overwrite the cookie.

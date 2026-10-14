@@ -5,8 +5,8 @@ description: Use when extending THIS app (the Inertia Rust starter kit: Loco + I
 
 # Extending the Inertia Rust starter kit
 
-This app is a Loco app with its own Inertia adapter (`src/inertia/`) and a React frontend
-(`frontend/`). Two skills cover it:
+This app is a Loco app with Inertia (the `inertia-omega` crate, imported as `omega`, wired in
+by `src/inertia/`) and a React frontend (`frontend/`). Two skills cover it:
 
 - **`loco`** (`.claude/skills/loco/`): Loco itself. Doctrine, the full `loco_rs` API index,
   Sea-ORM, generic recipes. Check `api-index.md` there before guessing any `loco_rs` name.

@@ -37,7 +37,7 @@ and `docs/RAILS_TO_LOCO.md` (every Rails command and its equivalent here).
 | `src/app.rs` | `Hooks`: routes, initializers, workers, tasks, seeds |
 | `src/route_table.rs` | **every URL in the app**, the single source for Rust routes and `frontend/routes/*.ts` |
 | `src/page_types.rs` | the props structs whose TypeScript types are generated into `frontend/types/generated/` |
-| `src/inertia/` | our Inertia v3 server adapter (page object, partial reloads, prop kinds, SSR, CSRF, flash/errors cookie, CSP) |
+| `src/inertia/` | Inertia v3 around the `inertia-omega` crate (which does the protocol: page object, partial reloads, prop kinds); the kit adds the flash/errors cookie, CSRF, CSP, meta tags, SSR client, precognition |
 | `src/controllers/` | handlers; parse, call a model method, render an Inertia page or redirect |
 | `src/models/` | SeaORM models with the domain logic (`users.rs`, `sessions.rs`, `tokens.rs`, `accounts.rs`, `memberships.rs`, `invitations.rs`); `_entities/` is generated |
 | `src/live/`, `src/channels/` | live updates (the kit's Action Cable): the SSE hub, presence, and the app's channels |

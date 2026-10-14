@@ -128,8 +128,10 @@ and read it at http://localhost:8025.
 **Server**
 
 - [Loco](https://loco.rs) on axum, [SeaORM](https://www.sea-ql.org/SeaORM/) and SQLite.
-- An Inertia v3 server adapter (`src/inertia/`): partial reloads, deferred / merge / once /
-  scroll props, asset versioning, error bags, history encryption, Precognition, optional SSR.
+- Inertia v3 on [inertia-omega](https://github.com/inertiajs/inertia-omega), the Inertia team's
+  Rust adapter: partial reloads, deferred / merge / once / scroll props, asset versioning, error
+  bags, history encryption. `src/inertia/` wires it into Loco and adds Rails-style flash, CSRF,
+  the CSP nonce, meta tags, Precognition and optional SSR.
 - Typed routes: `src/route_table.rs` generates `frontend/routes/*.ts`.
 - Background jobs on a SQLite queue (no Redis), scheduled tasks, mail.
 - Live updates: channels, `broadcast_to`, presence and `perform` over Server-Sent Events
@@ -264,7 +266,7 @@ More recipes: [accounts](.claude/skills/starter-kit/recipes/accounts.md),
 |---|---|
 | `src/route_table.rs` | every URL; generates `frontend/routes/*.ts` |
 | `src/controllers/`, `src/models/` | handlers and models (domain logic lives on the model) |
-| `src/inertia/` | the Inertia server adapter |
+| `src/inertia/` | Inertia wiring around inertia-omega: flash, CSRF, CSP, document, SSR |
 | `src/live/`, `src/channels/` | live updates and the app's channels |
 | `src/workers/`, `src/mailers/`, `src/tasks/` | jobs, mail, `cargo loco task …` |
 | `migration/`, `src/fixtures/` | migrations and seed data |
@@ -400,7 +402,7 @@ pages and flash messages still match that kit, with organizations added on top (
 | Database | SQLite, Active Record | SQLite, SeaORM (`migration/`, `src/models/`) |
 | Jobs | Solid Queue | Loco's queue on SQLite |
 | Live updates | Action Cable | `src/live/` (SSE, plus `POST /live/perform`) |
-| Inertia | `inertia_rails` gem | `src/inertia/`, in this repo |
+| Inertia | `inertia_rails` gem | the `inertia-omega` crate, wired in by `src/inertia/` |
 | Frontend | `app/javascript`, `rails-vite-plugin` | `frontend/`, plain Vite with a manifest |
 | Tests | RSpec, Capybara | `cargo test`, Playwright |
 | Tooling | RuboCop, Brakeman, bundler-audit | `cargo fmt`, clippy, `cargo deny` |

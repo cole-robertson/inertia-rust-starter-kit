@@ -44,7 +44,6 @@ export const sections = [
       ["docs/RAILS_TO_LOCO.md", "reference/rails-to-loco.md", "Rails → Loco commands"],
       ["docs/INERTIA.md", "reference/inertia.md", "Inertia adapter"],
       ["docs/INERTIA_SECURITY.md", "reference/inertia-security.md", "Cookies, CSRF, headers"],
-      ["docs/INERTIA_CONTRACT.md", "reference/inertia-contract.md", "Adapter module contract"],
       ["docs/DEPLOY.md", "reference/deploy.md", "Deploy targets"],
       ["docs/DEPLOY_CLOUDFLARE.md", "reference/deploy-cloudflare.md", "Cloudflare Containers"],
       ["docs/BENCHMARK.md", "reference/benchmark.md", "Benchmark vs Rails"],

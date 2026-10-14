@@ -117,7 +117,7 @@ impl Model {
 2. `cargo loco task types:generate` writes `frontend/types/generated/ReportProps.ts`. Commit it;
    `tests/types_fresh.rs` (in `bin/ci` and CI) fails when it is stale. Never edit those files.
 3. Send it: `render(inertia, "reports/show", json!({ "report": report.to_props() }))`, or
-   `Props::new().prop("report", Prop::serialize(&report.to_props())?)` next to lazy/deferred props.
+   `Props::new().with("report", report.to_props())` next to lazy/deferred props.
    `render` also takes any `Serialize` struct whose fields are the props.
 4. Import it in the page:
    ```tsx
@@ -134,16 +134,17 @@ A one-off scalar (`{ total: number }`, a flag) can stay `json!` with an inline T
 ## Prop kinds
 
 `render(inertia, name, json!(..))` sends plain props. For the others, build `Props` and call
-`inertia.render` (`src/inertia/props.rs`, full table in `docs/INERTIA.md`):
+`inertia.render` (inertia-omega's props, re-exported by `src/inertia/props.rs`; full table in
+`docs/INERTIA.md`):
 
 ```rust
-use crate::inertia::{defer, lazy, merge, optional, Props};
+use crate::inertia::{defer, lazy, optional, Props};
 
 inertia.render("reports/index", Props::new()
-    .prop("total", 42)                                            // plain
-    .prop("chart", defer(move || async move { slow_chart(&db).await }))  // after first paint
-    .prop("filters", optional(|| async { Ok(json!([..])) }))      // only when asked for
-    .prop("rows", merge(move || async move { page_of_rows(&db, page).await })), // appended on reload
+    .with("total", 42)                                            // plain
+    .with("chart", defer(move || async move { slow_chart(&db).await }))  // after first paint
+    .with("filters", optional(|| async { Ok(json!([..])) }))      // only when asked for
+    .with("rows", lazy(move || async move { page_of_rows(&db, page).await }).merge()), // appended on reload
 ).await
 ```
 
@@ -152,18 +153,18 @@ inertia.render("reports/index", Props::new()
 | `-> { }` | `lazy(..)` | evaluated only if kept |
 | `InertiaRails.defer` | `defer(..)`, `.group("g")` | `<Deferred data="chart" fallback={..}>` |
 | `InertiaRails.optional` | `optional(..)` | `router.reload({ only: ["filters"] })` |
-| `InertiaRails.merge` | `merge(..)`, `.prepend()`, `.match_on("id")` | `router.reload({ only: ["rows"], data: { page: 2 } })` |
-| `InertiaRails.scroll` | `scroll(ScrollMetadata::new(..), ..)` | `<InfiniteScroll data="rows">` |
-| `InertiaRails.once` | `once(..)` | cached client-side |
+| `InertiaRails.merge` | `merge(value)` or `lazy(..).merge()`, `.prepend()`, `.match_on("id")` | `router.reload({ only: ["rows"], data: { page: 2 } })` |
+| `InertiaRails.scroll` | `scroll(Paginator::new(rows, total, per_page, page))`, or `scroll_with(\|\| async { .. })` | `<InfiniteScroll data="rows">` |
+| `InertiaRails.once` | `once(..)`, `.once_as("key")`, `.until(duration)` | cached client-side |
 | `inertia_share` | `SharedProps` in `ctx.shared_store` (see `auth::register_shared_props`) | `usePage().props` |
 
 Closures are `'static`: clone what they need (`let db = ctx.db.clone();`) and `move` it in.
 **Partial reloads** (`only`/`except`) work for every prop without extra code; a `lazy`/`defer`
-closure runs only when its prop is sent.
+closure runs only when its prop is sent, and sibling closures run concurrently.
 
 To add a **shared prop**, extend the closure in `auth::register_shared_props`: one
 `SharedProps` is stored, so a second `insert` would replace the `auth` prop. Give it a props
-struct (`Prop::serialize(&value)?`, as `auth` and `accounts` do), list it in `src/page_types.rs`,
+struct (`.with("key", value)`, as `auth` and `accounts` do), list it in `src/page_types.rs`,
 and add the key with its generated type to `SharedProps` in `frontend/types/index.ts`.
 
 ## Verify
